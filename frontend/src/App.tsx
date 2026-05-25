@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 // Import from rust WASM
 import init, { get_instrument_database, get_note_name } from 'core_engine';
+// Custom components
+import { Fretboard } from "./components/fretboard";
 
 interface Tuning {
     name: string;
@@ -45,18 +47,11 @@ export default function App() {
     }
 
     return (
-        <div className="p-8 max-w-2xl mx-auto bg-slate-900 text-white min-h-screen">
-            <h1 className="text-3xl font-bold mb-4">Fretbored WASM Test</h1>
+        <div className="min-h-screen bg-slate-900 text-slate-100 p-8 flex flex-col items-center">
+            <h1 className="text-3xl font-bold mb-8">Fretbored</h1>
 
-            <div className="bg-slate-800 p-4 rounded mb-6 border border-slate-700">
-                <h2 className="text-xl font-semibold mb-2 text-green-400">Rust CoreEngine Response:</h2>
-                <p>Guitar Standard (String 0, Fret 3): <strong>{testNote}</strong></p>
-            </div>
+            <Fretboard />
 
-            <h2 className="text-xl font-semibold mb-2">Available Instruments:</h2>
-            <pre className="bg-black p-4 rounded text-xs text-emerald-400 overflow-x-auto">
-                {JSON.stringify(db, null, 2)}
-            </pre>
         </div>
     );
 }
