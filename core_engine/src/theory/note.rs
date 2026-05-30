@@ -119,6 +119,24 @@ impl Note {
             _ => unreachable!("Modulo 12 ensures values are 0-11"),
         }
     }
+
+    // Note int value from enum
+    pub fn value(&self) -> u8 {
+        match self {
+            Note::C => 0,
+            Note::CSharp => 1,
+            Note::D => 2,
+            Note::DSharp => 3,
+            Note::E => 4,
+            Note::F => 5,
+            Note::FSharp => 6,
+            Note::G => 7,
+            Note::GSharp => 8,
+            Note::A => 9,
+            Note::ASharp => 10,
+            Note::B => 11,
+        }
+    }
 }
 
 #[cfg(test)]
