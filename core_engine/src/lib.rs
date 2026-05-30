@@ -1,6 +1,5 @@
 use wasm_bindgen::prelude::*;
 
-pub mod chord;
 pub mod instrument;
 pub mod theory;
 
