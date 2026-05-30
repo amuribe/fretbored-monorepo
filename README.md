@@ -36,7 +36,7 @@ The project is split bifurcated into a high-performance Rust core which handles 
 
 ### Phase 2: Core UI Components
 
-- [ ] **State Management:** Create a custom React hook (e.g., `useInstrument`) to manage active tunings and interface with the WASM backend.
+- [x] **State Management:** Create a custom React hook (e.g., `useInstrument`) to manage active tunings and interface with the WASM backend.
 - [x] **Fretboard Grid:** Build a `<Fretboard />` component mapping over string arrays to render a responsive 0-24 fret grid.
 - [x] **Data Binding:** Connect the UI grid to the Rust engine to display correct note names based on fret and string coordinates.
 
