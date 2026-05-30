@@ -2,23 +2,25 @@ import { get_note_name } from "core_engine";
 import { useEffect, useState } from "react";
 
 interface FretNodeProps {
+    instrument: string;
+    tuning: string;
     stringIndex: number;
     fretIndex: number;
 }
 
-export default function FretNode({ stringIndex, fretIndex }: FretNodeProps) {
+export default function FretNode({ instrument, tuning, stringIndex, fretIndex }: FretNodeProps) {
     // Create note name state
     const [noteName, setNoteName] = useState<string | null>(null);
     // Create state for fret being clicked
     const [isToggled, setIsToggled] = useState<boolean>(false);
 
     useEffect(() => {
-        // Guitar and standard are hardcoded for now, will be dynamic after db is updated in dev
-        const note = get_note_name("Guitar", "Standard", stringIndex, fretIndex);
+        // Get note from instrument and tuning from ui selection
+        const note = get_note_name(instrument, tuning, stringIndex, fretIndex);
 
         // Update state
         setNoteName(note ?? null);
-    }, [stringIndex, fretIndex]);
+    }, [instrument, tuning, stringIndex, fretIndex]);
 
 
     return (
