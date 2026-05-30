@@ -1,108 +1,218 @@
 use crate::theory::Note;
-use serde::Deserialize;
-use std::collections::HashSet;
+use crate::theory::interval::{Interval, calculate_target_note};
 
-// A chord template defined in JSON file chords.json
-#[derive(Debug, Deserialize, PartialEq)]
-pub struct ChordTemplate {
-    pub name: String,
-    pub intervals: Vec<u8>,
+// Use composition and separate the chord's quality(triad/sus) from the extension
+// It is slightly slower but the goal of this project is to handle extremely complex chords
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChordQuality {
+    Major,
+    Minor,
+    Diminished,
+    Augmented,
+    Sus2,
+    Sus4,
 }
 
-// Holds all locally defined chords
-
-pub struct ChordDatabase {
-    pub templates: Vec<ChordTemplate>,
+// The chord's extension m7 m9
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Extension {
+    // Not all chords have extensions i.e triads
+    None,
+    // 6ths
+    Sixth,
+    SixNine,
+    // 7ths
+    MinorSeventh,
+    MajorSeventh,
+    DominantSeventh,
+    DiminishedSeventh,
+    // 9ths
+    Ninth,
+    MajorNinth,
+    FlatNinth,
+    SharpNinth,
+    // 11ths
+    Eleventh,
+    MajorEleventh,
+    SharpEleventh,
+    MajorSharpEleventh,
+    // 13ths
+    Thirteenth,
+    MajorThirteenth,
+    FlatThirteenth,
 }
 
-impl ChordDatabase {
-    // Load JSON at compile time
-    pub fn load() -> Self {
-        let json_data = include_str!("data/chords.json");
-
-        // Convert string to ChordTemplate
-        let templates: Vec<ChordTemplate> =
-            serde_json::from_str(json_data).expect("Failed to parse chords.json");
-
-        Self { templates }
-    }
+// ChordType is the abstract mathematical formula of the chord
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChordType {
+    pub quality: ChordQuality,
+    pub extension: Extension,
 }
 
-// Given the absolute MIDI values of the notes in a chord, convert them into unique integers 0-11
-fn get_unique_pitch_classes(midi_notes: &[u8]) -> HashSet<u8> {
-    // Iterate over notes and map them to a valid chromatic range using modulo 12
-    // |&note| dereferences note to get value
-    midi_notes.iter().map(|&note| note % 12).collect()
+// Chord is the concrete instance of the chord
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Chord {
+    pub root: Note,
+    pub chord_type: ChordType,
+    pub notes: Vec<Note>,
 }
 
-// Calculate distance from root to all other notes in the set(chord) and return the sorted intervals in the chord
-fn calculate_intervals(root: u8, pitches: &HashSet<u8>) -> Vec<u8> {
-    // Mut because we must sort in place
-    // Move note above root then sub root to get distance (modulo 12 to wrap)
-    let mut intervals: Vec<u8> = pitches
-        .iter()
-        .map(|&note| (note + 12 - root) % 12)
-        .collect();
-
-    intervals.sort_unstable();
-    intervals
-}
-
-// Identify chord by trying every pitch as a root and looking for a matching pattern
-
-pub fn identify_chord(midi_notes: &[u8], db: &ChordDatabase) -> Option<String> {
-    let pitches = get_unique_pitch_classes(midi_notes);
-
-    // Loop through every pitch treating it as root
-    for &root in &pitches {
-        // Get intervals relative to root
-        let intervals = calculate_intervals(root, &pitches);
-
-        // Loop through chord templates to find a match
-        for template in &db.templates {
-            if intervals == template.intervals {
-                // If template match is found return formatted chord string
-                return Some(format!("{:?} {}", Note::from_midi(root), template.name));
-            }
+impl ChordQuality {
+    // Generate a static slice of the intervals after root which make up ChordQuality (e.g. minor: m3, P5 )
+    pub fn intervals(&self) -> &'static [Interval] {
+        match self {
+            ChordQuality::Major => &[Interval::MajorThird, Interval::PerfectFifth],
+            ChordQuality::Minor => &[Interval::MinorThird, Interval::PerfectFifth],
+            ChordQuality::Diminished => &[Interval::MinorThird, Interval::Tritone],
+            ChordQuality::Augmented => &[Interval::MajorThird, Interval::MinorSixth],
+            ChordQuality::Sus2 => &[Interval::MajorSecond, Interval::PerfectFifth],
+            ChordQuality::Sus4 => &[Interval::PerfectFourth, Interval::PerfectFifth],
         }
     }
-
-    // Return None if no matching template is found
-    None
 }
+
+impl Extension {
+    // Generate a static slice of the intervals which make up the extension (e.g MinorSeventh: {MinorSeventh})
+    pub fn intervals(&self) -> &'static [Interval] {
+        match self {
+            Extension::None => &[],
+
+            // 6ths (Adds the Major 6th interval)
+            Extension::Sixth => &[Interval::MajorSixth],
+            // 6/9 (Stacks Major 6th and the 9th,  9th maps to a Major 2nd)
+            Extension::SixNine => &[Interval::MajorSixth, Interval::MajorSecond],
+
+            // 7ths
+            Extension::MinorSeventh | Extension::DominantSeventh => &[Interval::MinorSeventh],
+            Extension::MajorSeventh => &[Interval::MajorSeventh],
+            Extension::DiminishedSeventh => &[Interval::MajorSixth], // Enharmonically bb7
+
+            // 9ths (Includes the 7th. Modulo 12 maps 9th to 2nd)
+            Extension::Ninth => &[Interval::MinorSeventh, Interval::MajorSecond],
+            Extension::MajorNinth => &[Interval::MajorSeventh, Interval::MajorSecond],
+            Extension::FlatNinth => &[Interval::MinorSeventh, Interval::MinorSecond],
+            Extension::SharpNinth => &[Interval::MinorSeventh, Interval::MinorThird],
+
+            // 11ths (Includes 7th and 9th. 11th maps to 4th)
+            Extension::Eleventh => &[
+                Interval::MinorSeventh,
+                Interval::MajorSecond,
+                Interval::PerfectFourth,
+            ],
+            Extension::MajorEleventh => &[
+                Interval::MajorSeventh,
+                Interval::MajorSecond,
+                Interval::PerfectFourth,
+            ],
+            Extension::SharpEleventh => &[
+                Interval::MinorSeventh,
+                Interval::MajorSecond,
+                Interval::Tritone,
+            ],
+            Extension::MajorSharpEleventh => &[
+                Interval::MajorSeventh,
+                Interval::MajorSecond,
+                Interval::Tritone,
+            ],
+            // 13ths (Includes 7th and 9th. 11th is omitted. 13th maps to 6th)
+            Extension::Thirteenth => &[
+                Interval::MinorSeventh,
+                Interval::MajorSecond,
+                Interval::MajorSixth,
+            ],
+            Extension::MajorThirteenth => &[
+                Interval::MajorSeventh,
+                Interval::MajorSecond,
+                Interval::MajorSixth,
+            ],
+            Extension::FlatThirteenth => &[
+                Interval::MinorSeventh,
+                Interval::MajorSecond,
+                Interval::MinorSixth,
+            ],
+        }
+    }
+}
+
+impl Chord {
+    // Allocate memory and calculate notes based on ChordQuality and Extension
+    pub fn new(root: Note, chord_type: ChordType) -> Self {
+        // The intervals that make up the chord quality (e.g minor -> minor third, perfect fifth)
+        let quality_intervals = chord_type.quality.intervals();
+        // The intervals that make up the chord extension (e.g major9 -> major7, major9 (mapped to major 2nd))
+        let extension_intervals = chord_type.extension.intervals();
+
+        // Get amount of notes in the chord (len(quality) + len(extension) + len(root = 1))
+        let mut notes = Vec::with_capacity(quality_intervals.len() + extension_intervals.len() + 1);
+        // Add root to start of chord
+        notes.push(root);
+
+        // Stack triad/sus intervals
+        // deref interval
+        for &interval in quality_intervals {
+            notes.push(calculate_target_note(root, interval));
+        }
+
+        // Stack extension intervals
+        // deref interval
+        for &interval in extension_intervals {
+            notes.push(calculate_target_note(root, interval));
+        }
+
+        Self {
+            root,
+            chord_type,
+            notes,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-
-    fn test_load_database() {
-        let db = ChordDatabase::load();
-        // Verify it loaded the correct amount of chords
-        assert_eq!(db.templates.len(), 7);
-
-        // Verify the first chord is a fifth chord
-        assert_eq!(db.templates[0].name, "5");
-        assert_eq!(db.templates[0].intervals, vec![0, 7]);
-
-        // Verify the second chord is Major
-        assert_eq!(db.templates[1].name, "Major");
-        assert_eq!(db.templates[1].intervals, vec![0, 4, 7]);
+    fn test_generate_major_triad() {
+        let c_major = Chord::new(
+            Note::C,
+            ChordType {
+                quality: ChordQuality::Major,
+                extension: Extension::None,
+            },
+        );
+        assert_eq!(c_major.notes, vec![Note::C, Note::E, Note::G]);
+        assert_eq!(c_major.root, Note::C);
     }
 
     #[test]
-    fn test_chord_identification() {
-        let db = ChordDatabase::load();
-
-        // Test C Major triad: C (60), E (64), G (67)
-        let c_major = vec![60, 64, 67];
-        assert_eq!(identify_chord(&c_major, &db), Some("C Major".to_string()));
-
-        // Test C Major inversion: E (64), G (67), C (72)
-        let c_major_inversion = vec![64, 67, 72];
+    fn test_generate_dominant_ninth() {
+        // G9 = G, B, D, F, A
+        let g_dom9 = Chord::new(
+            Note::G,
+            ChordType {
+                quality: ChordQuality::Major,
+                extension: Extension::Ninth,
+            },
+        );
         assert_eq!(
-            identify_chord(&c_major_inversion, &db),
-            Some("C Major".to_string())
+            g_dom9.notes,
+            vec![Note::G, Note::B, Note::D, Note::F, Note::A]
+        );
+    }
+
+    #[test]
+    fn test_generate_minor_thirteenth() {
+        // A min13 = A, C, E, G, B, F#
+        let a_min13 = Chord::new(
+            Note::A,
+            ChordType {
+                quality: ChordQuality::Minor,
+                extension: Extension::Thirteenth,
+            },
+        );
+        assert_eq!(
+            a_min13.notes,
+            vec![Note::A, Note::C, Note::E, Note::G, Note::B, Note::FSharp]
         );
     }
 }
