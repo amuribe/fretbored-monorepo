@@ -121,7 +121,7 @@ impl Note {
     }
 
     // Note int value from enum
-    pub fn value(&self) -> u8 {
+    pub const fn value(&self) -> u8 {
         match self {
             Note::C => 0,
             Note::CSharp => 1,
@@ -137,6 +137,11 @@ impl Note {
             Note::B => 11,
         }
     }
+}
+
+// Helper Functino:  get MidiNote from Note enum value and octave number
+const fn midi_from_note(note_val: u8, octave: i8) -> MidiNote {
+    MidiNote(((octave + 1) * 12 + note_val as i8) as u8)
 }
 
 #[cfg(test)]
