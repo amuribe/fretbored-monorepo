@@ -140,7 +140,7 @@ impl Note {
 }
 
 // Helper Functino:  get MidiNote from Note enum value and octave number
-const fn midi_from_note(note_val: u8, octave: i8) -> MidiNote {
+pub const fn midi_from_note(note_val: u8, octave: i8) -> MidiNote {
     MidiNote(((octave + 1) * 12 + note_val as i8) as u8)
 }
 
