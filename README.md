@@ -1,76 +1,84 @@
 # Fretbored
 
-An interactive, data-driven fretboard visualizer for multiple string instruments, and a music theory engine.
+An interactive, data-driven fretboard visualizer and advanced music theory engine.
 
-The project is split bifurcated into a high-performance Rust core which handles the music theory logic, and a React frontend for interactive visualization, connected via WebAssembly (WASM).
+The project is bifurcated into a high-performance, zero-allocation Rust core which handles the complex music theory and instrument logic, and a React frontend for interactive visualization, connected seamlessly via WebAssembly (WASM).
 
 ## Architecture & Tech Stack
 
-- **Core Engine:** Rust
-- **Frontend:** React, TypeScript, Vite, Tailwind CSS v4
-- **Bridge (Planned):** WebAssembly (`wasm-bindgen`)
+- **Core Engine:** Rust (Zero-allocation domain models, static data)
+- **Frontend:** React, TypeScript, Vite, CSS Modules
+- **Bridge:** WebAssembly (`wasm-bindgen`, `serde-wasm-bindgen`)
 
 ## Current Progress (Work Completed)
 
 ### Rust Core Engine (`core_engine`)
 
-- **Data-Driven Instruments:** Structured `Instrument` and `Tuning` models that load dynamically from an embedded `instruments.json` database.
-- **Scientific Pitch Notation (SPN) Parser:** Implemented parsing (e.g., `C#4`, `Db3`) into MIDI numbers using a type-safe `MidiNote` wrapper.
-- **Theory Foundations:** Basic implementations for `Note` and `Chord` identification.
-- **Testing & Linting:** Basic unit testing for bounds checking, parsing boundaries, and SPN conversions. Linting enforced via `cargo clippy`.
+- **Zero-Allocation Architecture:** Replaced runtime file I/O and JSON parsing with compile-time static evaluation. Domain constants live in the binary's `.rodata` segment.
+- **Instrument Registry:** Implemented a static `TuningRegistry` for $O(1)$ lookups of standard and alternate tunings across Guitar, Bass, and Ukulele.
+- **Advanced Theory Engine:** - **Notes & Enharmonics:** Complete Scientific Pitch Notation (SPN) parsing to MIDI, with full support for note spellings and enharmonic equivalents (sharps, flats).
+  - **Intervals & Scales:** Modular interval math driving a generator for Major, Minor, and Pentatonic scales.
+  - **Composable Chords:** Highly scalable chord architecture separating base triads (`ChordQuality`) from modular `Extension`s (6ths, 7ths, 9ths, 11ths, 13ths, and alterations).
+- **WASM Bridge:** Engine logic successfully exported to WebAssembly, exposing `get_note_at_fret` and `list_tunings` APIs to the frontend.
 
 ### Frontend (`frontend`)
 
 - **Scaffolding:** Initialized Vite + React + TypeScript environment.
-- **Styling:** Configured Tailwind CSS v4.
-- **Cleanup:** Purged default boilerplate and assets to establish a clean slate.
+- **Styling:** Configured CSS Modules for scoped, collision-free component styling.
+- _Note: The frontend UI is currently decoupled pending rewiring to the new WASM architecture._
+
+---
 
 ## Roadmap & Task List
 
-### Phase 1: The WASM Bridge
+### Phase 1: Theory Engine (Complete)
 
-- [x] Add `wasm-bindgen` to `Cargo.toml`.
-- [x] Write wrapper functions in Rust to expose `InstrumentDatabase::load()` and `note_at_fret()`.
-- [x] Compile the engine to a node module using `wasm-pack`.
-- [x] Import and initialize the WASM module in the React frontend.
+- [x] Establish base `Note`, `MidiNote`, and `Interval` math using modulo 12 logic.
+- [x] Implement enharmonic spelling logic (`NoteSpelling`).
+- [x] Build scale generator (`ScaleType`).
+- [x] Overhaul chord engine to a composable `ChordQuality` + `Extension` struct.
 
-### Phase 2: Core UI Components
+### Phase 2: Instrument Data & WASM Bridge (Complete)
 
-- [x] **State Management:** Create a custom React hook (e.g., `useInstrument`) to manage active tunings and interface with the WASM backend.
-- [x] **Fretboard Grid:** Build a `<Fretboard />` component mapping over string arrays to render a responsive 0-24 fret grid.
-- [x] **Data Binding:** Connect the UI grid to the Rust engine to display correct note names based on fret and string coordinates.
+- [x] Extract `Tuning` and `FretBoardConfig` into zero-allocation domain types.
+- [x] Hardcode physical instrument structures into a `TuningRegistry`.
+- [x] Add `wasm-bindgen` and compile the engine to a node module.
+- [x] Expose tuning lookups and fretboard note calculation to the frontend.
 
-### Phase 3: Engine Expansion (Theory)
+### Phase 3: The Mapping Algorithm (Current Phase)
 
-- [ ] **Intervals:** Create an `interval.rs` module to define distances between notes (e.g., Minor 3rd).
-- [ ] **Scales:** Create a `scale.rs` module to generate scales (Major, Minor, Pentatonic) using root notes and interval formulas.
-- [ ] **Scale Mapping:** Write a function to calculate all `(string, fret)` coordinates for a given scale across an active instrument tuning.
+- [ ] **Coordinate Matrix:** Write the core search algorithm (`find_notes_on_fretboard`) that takes a generated `Chord` or Scale `Vec<Note>` and scans a `FretBoardConfig` to return all physical `(string_index, fret_number)` coordinates.
 
-### Phase 4: Audio Synthesis
+### Phase 4: Frontend Integration & UI
+
+- [ ] **State Management:** Write a custom React hook to interface with the new WASM API.
+- [ ] **Fretboard Grid:** Build a responsive `<Fretboard />` component mapping the physical dimensions of the active tuning.
+- [ ] **Data Binding:** Connect the UI grid to the Rust engine's mapping matrix to dynamically plot scales and chords.
+
+### Phase 5: Voicing Engine (Advanced Theory)
+
+- [ ] Build a filter to analyze raw fretboard coordinates and output ergonomic, playable chord voicings based on physical hand-stretch constraints.
+
+### Phase 6: Audio Synthesis
 
 - [ ] Implement the Web Audio API in the frontend.
 - [ ] Map outputted `MidiNote` values to exact frequencies.
-- [ ] Generate basic sine/triangle wave tones on user interaction.
-
-### Phase 5: Database Expansion
-
-Once the core visualization and theory engine are stable, expand the static data catalog to support a wider range of musical applications.
-
-- [ ] **Instruments:** Add support for extended-range guitars (7-string, 8-string), ukuleles, banjos, and mandolins.
-- [ ] **Tunings:** Populate `instruments.json` with alternate and open tunings (e.g., DADGAD, Open G, Drop C).
-- [ ] **Chord Library:** Expand the chord recognition engine to include 7ths (Maj7, Min7, Dom7), extended chords (9ths, 11ths, 13ths),altered chords, etc.
-- [ ] **Scale Library:** Add the 7 modes of the Major scale, Harmonic Minor, Melodic Minor, and common exotic scales.
+- [ ] Generate standard instrument tones on user interaction.
 
 ## Getting Started
 
 ### Prerequisites
 
 - Rust (Cargo)
+- `wasm-pack` (Install via `cargo install wasm-pack`)
 - Node.js & npm
 
-### Running the Backend Tests
+### 1. Build the Core Engine (WASM)
+
+Compile the Rust core into a WebAssembly module targeting the web.
 
 ```bash
 cd core_engine
 cargo test
+wasm-pack build --target web
 ```
