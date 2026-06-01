@@ -1,3 +1,4 @@
+pub mod registry;
 pub mod tuning;
 pub use tuning::*;
 
