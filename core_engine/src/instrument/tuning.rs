@@ -3,7 +3,7 @@ use crate::theory::{MidiNote, Note, note::midi_from_note};
 // Since tunings don't change <'a> ...
 // Tunings are fixed constants that never change, so there is no reason for heap allocation
 // borrow, so data lives in the compiled binary
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Tuning<'a> {
     // Use slices instead of owned String/Vec since tuning data is fixed at runtime
     pub name: &'a str,
