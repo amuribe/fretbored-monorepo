@@ -232,10 +232,8 @@ fn is_valid_chord(
     // Rule 3: every target pitch class must be present.
     // played_mask & target_mask keeps only the covered target bits.
     // If this doesn't equal target_mask, at least one target note is missing.
-    if config.require_all_target_notes {
-        if (played_mask & target_mask) != target_mask {
-            return false;
-        }
+    if config.require_all_target_notes && (played_mask & target_mask) != target_mask {
+        return false;
     }
 
     true
