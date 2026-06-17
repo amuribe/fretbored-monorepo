@@ -1,50 +1,26 @@
 use crate::instrument::tuning::{BassTunings, GuitarTunings, StandardTunings, Tuning};
-use std::collections::HashMap;
 
-// Index instruments and tuning
-
-// Tunings don't change so marked as static
-pub struct TuningRegistry {
-    tunings: HashMap<&'static str, Tuning<'static>>,
-}
-
-impl Default for TuningRegistry {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl TuningRegistry {
-    pub fn new() -> Self {
-        let mut tunings = HashMap::new();
-
-        // String key consists of <instrument-name>/<tuning-name>
-
-        // Insert tunings
-
+pub fn get_tuning(key: &str) -> Option<Tuning<'static>> {
+    match key {
         // GUITAR TUNINGS
-        tunings.insert("guitar/standard", StandardTunings::guitar_standard());
-        tunings.insert("guitar/drop_d", GuitarTunings::guitar_drop_d());
-        tunings.insert("guitar/eb_standard", GuitarTunings::guitar_eb_standard());
-        tunings.insert(
-            "guitar/full_step_down",
-            GuitarTunings::guitar_full_step_down(),
-        );
+        "guitar/standard" => Some(StandardTunings::guitar_standard()),
+        "guitar/drop_d" => Some(GuitarTunings::guitar_drop_d()),
+        "guitar/eb_standard" => Some(GuitarTunings::guitar_eb_standard()),
+        "guitar/full_step_down" => Some(GuitarTunings::guitar_full_step_down()),
+
         // BASS TUNINGS
-        tunings.insert("bass/standard", StandardTunings::bass_standard());
-        tunings.insert("bass/drop_d", BassTunings::bass_drop_d());
+        "bass/standard" => Some(StandardTunings::bass_standard()),
+        "bass/drop_d" => Some(BassTunings::bass_drop_d()),
+
+        // BANJO TUNINGS
+        "banjo/standard" => Some(StandardTunings::banjo_standard()),
+
+        // MANDOLIN TUNINGS
+        "mandolin/standard" => Some(StandardTunings::mandolin_standard()),
+
         // UKULELE TUNINGS
-        tunings.insert("ukulele/standard", StandardTunings::ukulele_standard());
+        "ukulele/standard" => Some(StandardTunings::ukulele_standard()),
 
-        Self { tunings }
-    }
-
-    pub fn get(&self, key: &str) -> Option<&Tuning<'static>> {
-        self.tunings.get(key)
-    }
-
-    // Return the full list of keys in the registry
-    pub fn keys(&self) -> Vec<&'static str> {
-        self.tunings.keys().copied().collect()
+        _ => None,
     }
 }

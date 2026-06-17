@@ -11,18 +11,28 @@ pub struct Tuning<'a> {
 }
 
 impl<'a> Tuning<'a> {
-    // Get the note produce by pressing a specified fret on a specific string
+    /// Returns the Note (pitch class) at a given string and fret.
+    /// Used by the UI and output formatters to display readable note names to the user.
     pub fn note_at_fret(&self, string_index: usize, fret: u8) -> Option<Note> {
-        // '?' returns null if out of bounds
+        let midi = self.midi_at_fret(string_index, fret)?;
+        Some(Note::from_midi(midi.0))
+    }
+
+    /// Returns the absolute MidiNote value (octave + pitch) at a given string and fret.
+    /// Used by the DFS backtracking in voicing engine to calculate the 'stretch' between fingers
+    pub fn midi_at_fret(&self, string_index: usize, fret: u8) -> Option<MidiNote> {
+        // '?' safely handles cases where string index is out of bounds
         let open_midi = self.strings.get(string_index)?;
         let fretted_midi = open_midi.0 + fret;
-        // Get note from midi value of fretted note
-        Some(Note::from_midi(fretted_midi))
+
+        Some(MidiNote(fretted_midi))
     }
 }
 
 // Standard tuning for an instrument
 pub struct StandardTunings;
+
+// Custom tuningings
 
 // Guitar Tunings
 pub struct GuitarTunings;
@@ -71,6 +81,38 @@ impl StandardTunings {
             midi_from_note(Note::E.value(), 4), // E4
             midi_from_note(Note::C.value(), 4), // C4
             midi_from_note(Note::A.value(), 4), // A4
+        ];
+
+        Tuning {
+            name: "Standard",
+            strings: STRINGS,
+        }
+    }
+
+    // BANJO STANDARD TUNING(5 string) (Open G)
+    pub fn banjo_standard() -> Tuning<'static> {
+        const STRINGS: &[MidiNote] = &[
+            midi_from_note(Note::D.value(), 4), // D4
+            midi_from_note(Note::B.value(), 3), // B3
+            midi_from_note(Note::G.value(), 3), // G3
+            midi_from_note(Note::D.value(), 3), // D3
+            midi_from_note(Note::G.value(), 4), // G4
+        ];
+
+        Tuning {
+            name: "Open G",
+            strings: STRINGS,
+        }
+    }
+
+    // MANDOLIN STANDARD TUNING
+    pub fn mandolin_standard() -> Tuning<'static> {
+        // High to low, mapped by course(double string)
+        const STRINGS: &[MidiNote] = &[
+            midi_from_note(Note::E.value(), 5), // E5
+            midi_from_note(Note::A.value(), 4), // A4
+            midi_from_note(Note::D.value(), 4), // D4
+            midi_from_note(Note::G.value(), 3), // G3
         ];
 
         Tuning {
