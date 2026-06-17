@@ -1,3 +1,4 @@
+pub mod chord_parser;
 pub mod instrument;
 pub mod mapping;
 pub mod theory;
