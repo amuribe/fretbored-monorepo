@@ -10,8 +10,8 @@ pub enum RankingStrategy {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VoicingScore {
-    voicing: Voicing,
-    score: i32,
+    pub voicing: Voicing,
+    pub score: i32,
 }
 
 fn score_voicing(voicing: &Voicing) -> i32 {
@@ -25,8 +25,8 @@ fn score_voicing(voicing: &Voicing) -> i32 {
     let max_fret = *fretted.iter().max().unwrap() as i32;
     let min_fret = *fretted.iter().min().unwrap() as i32;
     let stretch = max_fret - min_fret;
-    // Count the number of Open strings (None(s) in the vec)
-    let open_count = voicing.frets.iter().filter(|x| x.is_none()).count() as i32;
+    // Count the number of Open strings (Some(0) in the vec)
+    let open_count = voicing.frets.iter().filter(|&&x| x == Some(0)).count() as i32;
 
     // Scoring based off: open string count, how difficult the stretch is, and how low it is on the neck
     // TBD: Scoring Values might change
