@@ -363,4 +363,48 @@ mod tests {
             }
         }
     }
+
+    mod benches {
+        use crate::{
+            instrument::{FretBoardConfig, Orientation, StandardTunings},
+            mapping::find_notes_on_fretboard,
+            theory::chord::{Chord, ChordQuality, ChordType, Extension},
+        };
+
+        use super::*;
+        use std::time::Instant;
+
+        #[test]
+        #[ignore]
+        fn bench_voicing_generation_guitar_cmaj7() {
+            let config = FretBoardConfig::new(
+                StandardTunings::guitar_standard(),
+                24,
+                Orientation::RightHanded,
+            );
+
+            let chord = Chord::new(
+                Note::C,
+                ChordType {
+                    quality: ChordQuality::Major,
+                    extension: Extension::MajorSeventh,
+                },
+            );
+
+            let coords = find_notes_on_fretboard(&chord.notes, &config);
+            let config_open = [4, 9, 2, 7, 11, 4]; // E A D G B E
+            let voicing_config = VoicingConfig::default();
+
+            let start = Instant::now();
+            let voicings =
+                generate_voicing(&chord.notes, &coords, 6, &config_open, &voicing_config);
+            let elapsed = start.elapsed();
+
+            println!(
+                "Generated {} voicings for Cmaj7 in {:?}",
+                voicings.len(),
+                elapsed
+            );
+        }
+    }
 }
