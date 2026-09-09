@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::voicing::Voicing;
+use crate::voicing::{Voicing, calculate_open_count};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RankingStrategy {
@@ -14,19 +14,48 @@ pub struct VoicingScore {
     pub score: i32,
 }
 
-fn score_voicing(voicing: &Voicing) -> i32 {
-    // Filter out unfretted strings
-    let fretted: Vec<u8> = voicing.frets.iter().flatten().copied().collect();
-    // All open voicing are considered easiest
-    if fretted.is_empty() {
-        return 0;
+/// Compute (min_fret, max_fret) for fretted notes (> 0) in a single pass.
+/// Returns None if there are no fretted notes
+pub fn min_max_fret(voicing: &Voicing) -> Option<(u8, u8)> {
+    voicing
+        .frets
+        .iter()
+        .filter_map(|&f| f)
+        .filter(|&f| f > 0)
+        .fold(None, |acc, f| match acc {
+            None => Some((f, f)),
+            Some((min, max)) => Some((min.min(f), max.max(f))),
+        })
+}
+
+/// Calculate the physical finger stretch of playing a chord (excluding open and muted strings)
+#[inline]
+pub fn calculate_stretch(voicing: &Voicing) -> u8 {
+    // Calculate stretch using min and max fret in voicing, stretch = 0 if no notes are fretted
+    match min_max_fret(voicing) {
+        Some((min, max)) => max - min,
+        None => 0,
     }
-    // Calculate the largest stretch in the voicing
-    let max_fret = *fretted.iter().max().unwrap() as i32;
-    let min_fret = *fretted.iter().min().unwrap() as i32;
+}
+
+#[inline]
+pub fn min_fret_in_voicing(voicing: &Voicing) -> u8 {
+    min_max_fret(voicing).map(|(min, _)| min).unwrap_or(0)
+}
+
+#[inline]
+pub fn max_fret_in_voicing(voicing: &Voicing) -> u8 {
+    min_max_fret(voicing).map(|(_, max)| max).unwrap_or(0)
+}
+
+fn score_voicing(voicing: &Voicing) -> i32 {
+    let (min_fret, max_fret) = match min_max_fret(voicing) {
+        Some((min, max)) => (min as i32, max as i32),
+        None => return 0, // All open or muted: stretch is 0
+    };
+
     let stretch = max_fret - min_fret;
-    // Count the number of Open strings (Some(0) in the vec)
-    let open_count = voicing.frets.iter().filter(|&&x| x == Some(0)).count() as i32;
+    let open_count = calculate_open_count(voicing) as i32;
 
     // Scoring based off: open string count, how difficult the stretch is, and how low it is on the neck
     // TBD: Scoring Values might change
@@ -47,31 +76,22 @@ pub fn rank_voicings(
     strategy: RankingStrategy,
 ) -> Vec<VoicingScore> {
     let mut scored: Vec<VoicingScore> = voicings
-        .iter()
-        .map(|v| VoicingScore {
-            voicing: v.clone(),
-            score: score_voicing(v),
+        .into_iter()
+        .map(|v| {
+            let score = score_voicing(&v);
+            VoicingScore { voicing: v, score }
         })
         .collect();
 
-    scored.sort_by_key(|v| std::cmp::Reverse(v.score));
-
     match strategy {
-        RankingStrategy::MostPlayable => scored,
+        RankingStrategy::MostPlayable => scored.sort_by_key(|v| std::cmp::Reverse(v.score)),
         RankingStrategy::LowestPosition => {
             // Sort voicings solely by the lowest fret instead
-            scored.sort_by_key(|vs| {
-                vs.voicing
-                    .frets
-                    .iter()
-                    .flatten()
-                    .min()
-                    .copied()
-                    .unwrap_or(0)
-            });
-            scored
+            scored.sort_by_key(|vs| min_fret_in_voicing(&vs.voicing));
         }
     }
+
+    scored
 }
 
 #[cfg(test)]

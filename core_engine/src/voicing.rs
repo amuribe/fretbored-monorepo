@@ -1,5 +1,6 @@
 use crate::mapping::NoteCoordinate;
 use crate::theory::Note;
+use crate::voicing;
 use serde::{Deserialize, Serialize};
 use std::cmp::max;
 use std::collections::HashSet;
@@ -237,6 +238,11 @@ fn is_valid_chord(
     }
 
     true
+}
+
+/// Counts the number of open strings in a voicing (fret == 0)
+pub fn calculate_open_count(voicing: &Voicing) -> usize {
+    voicing.frets.iter().filter(|&&x| x == Some(0)).count()
 }
 
 #[cfg(test)]
