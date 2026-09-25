@@ -1,6 +1,5 @@
 use crate::mapping::NoteCoordinate;
 use crate::theory::Note;
-use crate::voicing;
 use serde::{Deserialize, Serialize};
 use std::cmp::max;
 use std::collections::HashSet;
