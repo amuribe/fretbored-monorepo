@@ -10,7 +10,12 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Chord { args, intervals } => {
+        Commands::Chord {
+            args,
+            intervals,
+            instrument,
+            voicings,
+        } => {
             // Route the input based on the number of arguments provided
             let parse_result = match args.len() {
                 1 => parse_chord_symbol(&args[0]),
@@ -61,6 +66,20 @@ fn main() {
 
                 println!("{}", note_names.join(", "));
             }
+            // TODO: Vocing generation using instrument and voicings params
+            // TODO: Identify and scale commands
+        }
+        Commands::Identify { frets, instrument } => {
+            // TODO: implement
+            eprintln!("Identify command has not yet been implemented.");
+        }
+        Commands::Scale {
+            root,
+            scale_type,
+            instrument,
+        } => {
+            // TODO: implement
+            eprintln!("Scale command has not yet been implemented.");
         }
     }
 }

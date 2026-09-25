@@ -21,10 +21,39 @@ pub enum Commands {
         /// The chord symbol or separated root, quality, and extension
         #[arg(required = true, num_args = 1..=3)]
         args: Vec<String>,
-
         /// Output the intervals whihc build the chord instead of pitches
         #[arg(short, long)]
         intervals: bool,
+
+        #[arg(short, long, default_value = "guitar/standard")]
+        instrument: String,
+
+        #[arg(short, long, default_value_t = 5)]
+        voicings: usize,
+    },
+
+    /// Identify a chord from frets
+    Identify {
+        /// Frets input as CSV: "3,2,0,0,3,3"
+        #[arg(required = true)]
+        frets: String,
+
+        #[arg(short, long, default_value = "guitar/standard")]
+        instrument: String,
+    },
+
+    /// Display a scale on the fretboard
+    Scale {
+        /// Root note of the scale
+        #[arg(required = true)]
+        root: String,
+
+        /// Scale type: major, minor, pentatonic
+        #[arg(required = true)]
+        scale_type: String,
+
+        #[arg(short, long, default_value = "guitar/standard")]
+        instrument: String,
     },
 }
 
@@ -48,6 +77,8 @@ mod tests {
         let Commands::Chord {
             args: parsed_args,
             intervals,
+            instrument,
+            voicings,
         } = cli.command;
         assert_eq!(parsed_args, vec!["Cm7"]);
         assert!(!intervals);
@@ -63,6 +94,8 @@ mod tests {
         let Commands::Chord {
             args: parsed_args,
             intervals,
+            instrument,
+            voicings,
         } = cli.command;
         assert_eq!(parsed_args, vec!["G", "minor", "9"]);
         assert!(!intervals);
