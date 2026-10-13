@@ -1,8 +1,7 @@
 // Format a voicing as a readable String output
 
 use crate::{
-    instrument::Tuning,
-    voicing::{Voicing, calculate_open_count},
+    instrument::Tuning, voicing::{Voicing, calculate_open_count}, voicing_ranker::calculate_stretch,
 };
 
 // Holds a voicing and metadata formatted for display.
@@ -73,14 +72,9 @@ pub fn format_voicing(voicing: &Voicing, tuning: &Tuning) -> String {
 pub fn format_voicing_w_playability(voicing: &Voicing, tuning: &Tuning) -> String {
     // Format voicing to string with plauability information
     let base_str = format_voicing(voicing, tuning);
-    let fretted: Vec<u8> = voicing.frets.iter().flatten().copied().collect();
 
-    let stretch = if fretted.is_empty() {
-        0
-    } else {
-        // Max fret - min fret
-        fretted.iter().max().unwrap() - fretted.iter().min().unwrap()
-    };
+    // Calculate the largest stretch in the voicing, ignoring open strings and muted strings
+    let stretch = calculate_stretch(voicing);
 
     let open_count = calculate_open_count(voicing);
     format!("{} | Stretch: {} | Open: {}", base_str, stretch, open_count)
@@ -110,7 +104,7 @@ mod tests {
         };
         let tuning = StandardTunings::guitar_standard();
         let formatted = format_voicing_w_playability(&voicing, &tuning);
-        assert!(formatted.contains("Stretch: 3"));
+        assert!(formatted.contains("Stretch: 2"));
         assert!(
             formatted.contains("Open: 2"),
             "Expected 'Open: 2', Actual: {}",
