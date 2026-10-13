@@ -69,9 +69,9 @@ mod tests {
 
         let coords = find_notes_on_fretboard(&c_major_triad, &config);
 
-        // Low E string (index 5)
+        // Low E string (index 0)
         assert!(coords.contains(&NoteCoordinate {
-            string_index: 5,
+            string_index: 0,
             fret: 0
         })); // Open E
         assert!(coords.contains(&NoteCoordinate {
@@ -83,17 +83,17 @@ mod tests {
             fret: 8
         })); // C
 
-        // A string (index 4)
+        // A string (index 1) in low-to-high tuning order
         assert!(coords.contains(&NoteCoordinate {
-            string_index: 4,
+            string_index: 1,
             fret: 3
         })); // C
         assert!(coords.contains(&NoteCoordinate {
-            string_index: 4,
+            string_index: 1,
             fret: 7
         })); // E
         assert!(coords.contains(&NoteCoordinate {
-            string_index: 4,
+            string_index: 1,
             fret: 10
         })); // G
 

@@ -208,7 +208,6 @@ mod tests {
     fn test_guitar_standard_open_notes() {
         let tuning = StandardTunings::guitar_standard();
         // Low to high: E2 A2 D3 G3 B3 E4
-        assert_eq!(tuning.strings[0], MidiNote(64)); // E4
         assert_eq!(tuning.strings[0], MidiNote(40)); // E2
         assert_eq!(tuning.strings[5], MidiNote(64)); // E4
     }
