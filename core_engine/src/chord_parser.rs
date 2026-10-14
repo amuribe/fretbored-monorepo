@@ -310,6 +310,17 @@ pub fn parse_chord_symbol(symbol: &str) -> Result<(Note, ChordType), ChordParseE
     // Isolate root and remainder
     let (root, rest1) = parse_root(trimmed)?;
 
+    // Recognize half diminished chords before generic quality parsing, "m7b5" is a special case
+    if rest1.eq_ignore_ascii_case("m7b5") {
+        return Ok((
+            root,
+            ChordType {
+                quality: ChordQuality::Diminished,
+                extension: Extension::MinorSeventh,
+            },
+        ));
+    }
+
     // Isolate quality and remainder
     let (quality_token, rest2) = parse_quality(rest1);
 
