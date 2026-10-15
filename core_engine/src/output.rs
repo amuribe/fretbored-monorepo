@@ -1,7 +1,9 @@
 // Format a voicing as a readable String output
 
 use crate::{
-    instrument::Tuning, voicing::{Voicing, calculate_open_count}, voicing_ranker::calculate_stretch,
+    instrument::Tuning,
+    voicing::{Voicing, calculate_open_count},
+    voicing_ranker::calculate_stretch,
 };
 
 // Holds a voicing and metadata formatted for display.

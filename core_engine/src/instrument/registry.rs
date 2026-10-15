@@ -1,5 +1,17 @@
 use crate::instrument::tuning::{BassTunings, GuitarTunings, StandardTunings, Tuning};
 
+pub const TUNING_KEYS: &[&str] = &[
+    "guitar/standard",
+    "guitar/drop_d",
+    "guitar/eb_standard",
+    "guitar/full_step_down",
+    "bass/standard",
+    "bass/drop_d",
+    "banjo/standard",
+    "mandolin/standard",
+    "ukulele/standard",
+];
+
 pub fn get_tuning(key: &str) -> Option<Tuning<'static>> {
     match key {
         // GUITAR TUNINGS
@@ -22,5 +34,17 @@ pub fn get_tuning(key: &str) -> Option<Tuning<'static>> {
         "ukulele/standard" => Some(StandardTunings::ukulele_standard()),
 
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_listed_key_resolves() {
+        for key in TUNING_KEYS {
+            assert!(get_tuning(key).is_some(), "missing tuning for key {key}");
+        }
     }
 }

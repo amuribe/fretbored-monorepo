@@ -118,6 +118,8 @@ pub fn generate_voicing(
 ///
 /// After returning from a branch implicitly undo the assignment by
 /// overwriting current_combo[current_string] on the next iteration
+// TODO: Extract state to struct to avoid passing 10+ parameters around
+#[allow(clippy::too_many_arguments)]
 fn backtrack(
     current_string: usize,
     total_strings: usize,

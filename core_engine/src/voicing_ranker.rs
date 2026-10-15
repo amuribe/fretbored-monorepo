@@ -83,6 +83,9 @@ pub fn rank_voicings(
         })
         .collect();
 
+    // Sort by frets first, so that equal score voicings are always in the same order.
+    scored.sort_by(|a, b| a.voicing.frets.cmp(&b.voicing.frets));
+
     match strategy {
         RankingStrategy::MostPlayable => scored.sort_by_key(|v| std::cmp::Reverse(v.score)),
         RankingStrategy::LowestPosition => {

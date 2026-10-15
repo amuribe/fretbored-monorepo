@@ -3,6 +3,9 @@ name = "core_engine"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "fretbored"
+path = "src/main.rs"
 [lib]
 crate-type = ["cdylib", "rlib"]
 

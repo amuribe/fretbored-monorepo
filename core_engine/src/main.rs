@@ -1,12 +1,31 @@
 mod cli;
+
+use std::process::ExitCode;
+
 use clap::Parser;
 use cli::{Cli, Commands};
-
 use core_engine::chord_parser::{parse_chord_parts, parse_chord_symbol};
+use core_engine::cli_engine::{
+    create_fretboard_config, generate_ranked_voicings, print_chord_intervals, resolve_tuning,
+};
+use core_engine::cli_error::CliError;
+use core_engine::instrument::Orientation;
+use core_engine::output::format_voicing_w_playability;
 use core_engine::theory::chord::Chord;
 use core_engine::theory::note::NoteSpelling;
+use core_engine::voicing::VoicingConfig;
+use core_engine::voicing_ranker::RankingStrategy::MostPlayable;
+fn main() -> ExitCode {
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("Error: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
 
-fn main() {
+fn run() -> Result<(), CliError> {
     let cli = Cli::parse();
 
     match cli.command {
@@ -15,71 +34,105 @@ fn main() {
             intervals,
             instrument,
             voicings,
-        } => {
-            // Route the input based on the number of arguments provided
-            let parse_result = match args.len() {
-                1 => parse_chord_symbol(&args[0]),
-                2 => parse_chord_parts(&args[0], &args[1], None),
-                3 => parse_chord_parts(&args[0], &args[1], Some(&args[2])),
-                _ => unreachable!("Clap restricts args to 1..=3"),
-            };
+        } => run_chord(
+            args,
+            intervals,
+            instrument,
+            voicings,
+            cli.max_stretch,
+            cli.capo,
+        ),
 
-            let (root, chord_type) = match parse_result {
-                Ok(res) => res,
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    std::process::exit(1);
-                }
-            };
-
-            // Generate the chord
-            let chord = Chord::new(root, chord_type);
-
-            // Output logic
-            if intervals {
-                let mut interval_names = vec!["Root".to_string()];
-
-                for interval in chord.chord_type.quality.intervals() {
-                    interval_names.push(format!("{:?}", interval));
-                }
-                for interval in chord.chord_type.extension.intervals() {
-                    interval_names.push(format!("{:?}", interval));
-                }
-
-                println!("{}", interval_names.join(", "));
-            } else {
-                // Use flats if 'm' or 'b' exists in the input strings
-                let raw_input = args.join(" ");
-                let prefer_flat = raw_input.contains('m') || raw_input.contains('b');
-
-                let note_names: Vec<String> = chord
-                    .notes
-                    .iter()
-                    .map(|&n| {
-                        if prefer_flat {
-                            NoteSpelling::prefer_flat(n).display()
-                        } else {
-                            NoteSpelling::prefer_sharp(n).display()
-                        }
-                    })
-                    .collect();
-
-                println!("{}", note_names.join(", "));
-            }
-            // TODO: Vocing generation using instrument and voicings params
-            // TODO: Identify and scale commands
-        }
         Commands::Identify { frets, instrument } => {
             // TODO: implement
-            eprintln!("Identify command has not yet been implemented.");
+            eprintln!(
+                "Identify command has not been implemented yet: frets={:?}, instrument={}",
+                frets, instrument
+            );
+            Ok(())
         }
+
         Commands::Scale {
             root,
             scale_type,
             instrument,
         } => {
             // TODO: implement
-            eprintln!("Scale command has not yet been implemented.");
+            eprintln!(
+                "Scale command has not been implemented yet: root={}, scale_type={}, instrument={}",
+                root, scale_type, instrument
+            );
+            Ok(())
         }
     }
+}
+
+fn run_chord(
+    args: Vec<String>,
+    intervals: bool,
+    instrument: String,
+    voicing_count: usize,
+    max_stretch: u8,
+    capo: u8,
+) -> Result<(), CliError> {
+    let parsed = match args.as_slice() {
+        [symbol] => parse_chord_symbol(symbol),
+        [root, quality] => parse_chord_parts(root, quality, None),
+        [root, quality, extension] => parse_chord_parts(root, quality, Some(extension)),
+        _ => unreachable!("clap restricts chord args to 1-3 elements"),
+    }
+    .map_err(|error| CliError::InvalidChord(error.to_string()))?;
+
+    let (root, chord_type) = parsed;
+    let chord = Chord::new(root, chord_type);
+
+    if intervals {
+        print_chord_intervals(&chord);
+        return Ok(());
+    }
+
+    // Decide enharmonic spelling for the chord notes based on the input
+    let prefer_flat = args.iter().any(|arg| arg.contains('b') || arg == "minor");
+
+    let note_names = chord
+        .notes
+        .iter()
+        .map(|&note| {
+            if prefer_flat {
+                NoteSpelling::prefer_flat(note).display()
+            } else {
+                NoteSpelling::prefer_sharp(note).display()
+            }
+        })
+        .collect::<Vec<_>>();
+
+    println!("Chord: {}", note_names.join(", "));
+
+    let tuning = resolve_tuning(&instrument)?;
+    let fretboard_config = create_fretboard_config(tuning, 24, Orientation::RightHanded);
+    let voicing_config = VoicingConfig {
+        max_stretch,
+        capo_fret: capo,
+        require_all_target_notes: true,
+        allow_open_strings: true,
+    };
+
+    let ranked_voicings =
+        generate_ranked_voicings(&chord, &fretboard_config, &voicing_config, MostPlayable);
+
+    if ranked_voicings.is_empty() {
+        return Err(CliError::NoVoicings);
+    }
+
+    println!("Top {} Voicings:", voicing_count);
+    for (index, scored) in ranked_voicings.iter().take(voicing_count).enumerate() {
+        println!(
+            "{}. Score {} | {}",
+            index + 1,
+            scored.score,
+            format_voicing_w_playability(&scored.voicing, &fretboard_config.tuning,)
+        );
+    }
+
+    Ok(())
 }

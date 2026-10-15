@@ -1,4 +1,6 @@
 pub mod chord_parser;
+pub mod cli_engine;
+pub mod cli_error;
 pub mod instrument;
 pub mod mapping;
 pub mod output;
