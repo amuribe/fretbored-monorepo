@@ -6,7 +6,8 @@ use clap::Parser;
 use cli::{Cli, Commands};
 use core_engine::chord_parser::{parse_chord_parts, parse_chord_symbol};
 use core_engine::cli_engine::{
-    create_fretboard_config, generate_ranked_voicings, print_chord_intervals, resolve_tuning,
+    build_scale_map, create_fretboard_config, format_scale_notes, generate_ranked_voicings,
+    print_chord_intervals, resolve_tuning,
 };
 use core_engine::cli_error::CliError;
 use core_engine::instrument::Orientation;
@@ -56,14 +57,7 @@ fn run() -> Result<(), CliError> {
             root,
             scale_type,
             instrument,
-        } => {
-            // TODO: implement
-            eprintln!(
-                "Scale command has not been implemented yet: root={}, scale_type={}, instrument={}",
-                root, scale_type, instrument
-            );
-            Ok(())
-        }
+        } => run_scale(&root, &scale_type, &instrument),
     }
 }
 
@@ -133,6 +127,13 @@ fn run_chord(
             format_voicing_w_playability(&scored.voicing, &fretboard_config.tuning,)
         );
     }
+
+    Ok(())
+}
+
+fn run_scale(root: &str, scale_name: &str, instrument: &str) -> Result<(), CliError> {
+    let scale_map = build_scale_map(root, scale_name, instrument, 24)?;
+    println!("Scale: {}", format_scale_notes(&scale_map));
 
     Ok(())
 }
