@@ -146,12 +146,7 @@ fn backtrack(
 
     // Branch 1 Mute the current string
     current_combo[current_string] = None;
-    backtrack(
-        current_string + 1,
-        ctx,
-        current_combo,
-        results
-    );
+    backtrack(current_string + 1, ctx, current_combo, results);
 
     // Branch 2: Play a fret on the current string
     // Each valid fret for the string is tried, subject to two pruning checks.
@@ -172,12 +167,7 @@ fn backtrack(
         // open strings are allowed, or within the sliding window).
         if (is_open_to_capo && ctx.config.allow_open_strings) || is_in_window {
             current_combo[current_string] = Some(fret);
-            backtrack(
-                current_string + 1,
-                ctx,
-                current_combo,
-                results
-            );
+            backtrack(current_string + 1, ctx, current_combo, results);
         }
     }
 }
