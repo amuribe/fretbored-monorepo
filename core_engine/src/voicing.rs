@@ -87,28 +87,38 @@ pub fn generate_voicing(
     // Slide window from search_start to search_end (inclusive)
 
     for window_start in search_start..=search_end {
-        let window_end = window_start + voice_config.max_stretch;
         // current_combo holds the in-progress assignment for each string.
         // None = muted. It is mutated in place and cloned only when a valid
         // voicing is found, keeping allocation costs low.
+        let ctx = SearchContext {
+            valid_frets_per_string: &valid_frets_per_string,
+            window_start,
+            window_end: window_start + voice_config.max_stretch,
+            target_mask,
+            open_strings,
+            config: voice_config,
+        };
         let mut current_combo: Vec<Option<u8>> = vec![None; string_count];
         backtrack(
             0, // start from the lowest string (index 0)
-            string_count,
-            &valid_frets_per_string,
-            window_start,
-            window_end,
+            &ctx,
             &mut current_combo,
             &mut results,
-            target_mask,
-            open_strings,
-            voice_config,
         );
     }
 
     results
 }
 
+// Read-only inputs provided to each level of the backtracking search
+struct SearchContext<'a> {
+    valid_frets_per_string: &'a [Vec<u8>],
+    window_start: u8,
+    window_end: u8,
+    target_mask: u16,
+    open_strings: &'a [u8],
+    config: &'a VoicingConfig,
+}
 /// Recursive backtracking: assigns a value to each string one at a time.
 ///
 /// At each depth level current_string we explore two branches:
@@ -120,73 +130,44 @@ pub fn generate_voicing(
 /// overwriting current_combo[current_string] on the next iteration
 fn backtrack(
     current_string: usize,
-    total_strings: usize,
-    valid_frets_per_string: &[Vec<u8>],
-    window_start: u8,
-    window_end: u8,
-    current_combo: &mut Vec<Option<u8>>,
+    ctx: &SearchContext,
+    current_combo: &mut [Option<u8>],
     results: &mut HashSet<Voicing>,
-    target_mask: u16,
-    open_strings: &[u8],
-    config: &VoicingConfig,
 ) {
     // Base case (bottom of tree) combination is complete
-    if current_string == total_strings {
-        if is_valid_chord(current_combo, target_mask, open_strings, config) {
+    if current_string == current_combo.len() {
+        if is_valid_chord(current_combo, ctx.target_mask, ctx.open_strings, ctx.config) {
             results.insert(Voicing {
-                frets: current_combo.clone(),
+                frets: current_combo.to_vec(),
             });
         }
         return;
     }
 
     // Branch 1 Mute the current string
-    // Assign None means don't play this string
     current_combo[current_string] = None;
-    backtrack(
-        current_string + 1,
-        total_strings,
-        valid_frets_per_string,
-        window_start,
-        window_end,
-        current_combo,
-        results,
-        target_mask,
-        open_strings,
-        config,
-    );
+    backtrack(current_string + 1, ctx, current_combo, results);
 
     // Branch 2: Play a fret on the current string
     // Each valid fret for the string is tried, subject to two pruning checks.
-    for &fret in &valid_frets_per_string[current_string] {
+    for &fret in &ctx.valid_frets_per_string[current_string] {
         // Pruning rule 1: never fret behind a capo
-        if fret < config.capo_fret {
+        if fret < ctx.config.capo_fret {
             continue;
         }
 
         // If fret is considered an open string to a capo
-        let is_open_to_capo = fret == config.capo_fret;
+        let is_open_to_capo = fret == ctx.config.capo_fret;
 
         // Pruning rule 2: fretted notes must lie within the current window
         // so that the hand-stretch constraint is respected.
-        let is_in_window = fret >= window_start && fret <= window_end;
+        let is_in_window = fret >= ctx.window_start && fret <= ctx.window_end;
 
         // Only proceed if this fret is reachable (either open-to-capo when
         // open strings are allowed, or within the sliding window).
-        if (is_open_to_capo && config.allow_open_strings) || is_in_window {
+        if (is_open_to_capo && ctx.config.allow_open_strings) || is_in_window {
             current_combo[current_string] = Some(fret);
-            backtrack(
-                current_string + 1,
-                total_strings,
-                valid_frets_per_string,
-                window_start,
-                window_end,
-                current_combo,
-                results,
-                target_mask,
-                open_strings,
-                config,
-            );
+            backtrack(current_string + 1, ctx, current_combo, results);
         }
     }
 }
@@ -232,13 +213,16 @@ fn is_valid_chord(
     // Rule 3: every target pitch class must be present.
     // played_mask & target_mask keeps only the covered target bits.
     // If this doesn't equal target_mask, at least one target note is missing.
-    if config.require_all_target_notes {
-        if (played_mask & target_mask) != target_mask {
-            return false;
-        }
+    if config.require_all_target_notes && (played_mask & target_mask) != target_mask {
+        return false;
     }
 
     true
+}
+
+/// Counts the number of open strings in a voicing (fret == 0)
+pub fn calculate_open_count(voicing: &Voicing) -> usize {
+    voicing.frets.iter().filter(|&&x| x == Some(0)).count()
 }
 
 #[cfg(test)]
@@ -363,6 +347,49 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    mod benches {
+        use crate::{
+            instrument::{FretBoardConfig, Orientation, StandardTunings},
+            mapping::find_notes_on_fretboard,
+            theory::chord::{Chord, ChordQuality, ChordType, Extension},
+        };
+
+        use super::*;
+        use std::time::Instant;
+
+        #[test]
+        fn bench_voicing_generation_guitar_cmaj7() {
+            let config = FretBoardConfig::new(
+                StandardTunings::guitar_standard(),
+                24,
+                Orientation::RightHanded,
+            );
+
+            let chord = Chord::new(
+                Note::C,
+                ChordType {
+                    quality: ChordQuality::Major,
+                    extension: Extension::MajorSeventh,
+                },
+            );
+
+            let coords = find_notes_on_fretboard(&chord.notes, &config);
+            let config_open = [4, 9, 2, 7, 11, 4]; // E A D G B E
+            let voicing_config = VoicingConfig::default();
+
+            let start = Instant::now();
+            let voicings =
+                generate_voicing(&chord.notes, &coords, 6, &config_open, &voicing_config);
+            let elapsed = start.elapsed();
+
+            println!(
+                "Generated {} voicings for Cmaj7 in {:?}",
+                voicings.len(),
+                elapsed
+            );
         }
     }
 }

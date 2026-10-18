@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
+use std::fmt;
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(try_from = "String")]
@@ -142,6 +144,39 @@ impl Note {
 // Helper Functino:  get MidiNote from Note enum value and octave number
 pub const fn midi_from_note(note_val: u8, octave: i8) -> MidiNote {
     MidiNote(((octave + 1) * 12 + note_val as i8) as u8)
+}
+
+// Error type for parsing failures
+#[derive(Debug, PartialEq, Eq)]
+pub struct ParseNoteError(pub String);
+
+impl fmt::Display for ParseNoteError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Failed to parse note: '{}'", self.0)
+    }
+}
+
+impl std::error::Error for ParseNoteError {}
+impl FromStr for Note {
+    type Err = ParseNoteError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().as_bytes() {
+            [b'C' | b'c'] => Ok(Note::C),
+            [b'C' | b'c', b'#'] | [b'D' | b'd', b'b' | b'B'] => Ok(Note::CSharp),
+            [b'D' | b'd'] => Ok(Note::D),
+            [b'D' | b'd', b'#'] | [b'E' | b'e', b'b' | b'B'] => Ok(Note::DSharp),
+            [b'E' | b'e'] => Ok(Note::E),
+            [b'F' | b'f'] => Ok(Note::F),
+            [b'F' | b'f', b'#'] | [b'G' | b'g', b'b' | b'B'] => Ok(Note::FSharp),
+            [b'G' | b'g'] => Ok(Note::G),
+            [b'G' | b'g', b'#'] | [b'A' | b'a', b'b' | b'B'] => Ok(Note::GSharp),
+            [b'A' | b'a'] => Ok(Note::A),
+            [b'A' | b'a', b'#'] | [b'B' | b'b', b'b' | b'B'] => Ok(Note::ASharp),
+            [b'B' | b'b'] => Ok(Note::B),
+            _ => Err(ParseNoteError(s.to_string())),
+        }
+    }
 }
 
 // For handling enharmonic equivalents
@@ -351,5 +386,21 @@ mod tests {
         for spelling in NoteSpelling::all_spellings(Note::ASharp) {
             assert_eq!(spelling.pitch, Note::ASharp);
         }
+    }
+
+    // Parse tests
+    #[test]
+    fn test_note_from_str_valid() {
+        assert_eq!("C".parse::<Note>(), Ok(Note::C));
+        assert_eq!("c#".parse::<Note>(), Ok(Note::CSharp));
+        assert_eq!("Db".parse::<Note>(), Ok(Note::CSharp));
+        assert_eq!("  g#  ".parse::<Note>(), Ok(Note::GSharp));
+    }
+
+    #[test]
+    fn test_note_from_str_invalid() {
+        assert!("H".parse::<Note>().is_err());
+        assert!("C##".parse::<Note>().is_err());
+        assert!("".parse::<Note>().is_err());
     }
 }
