@@ -1,5 +1,7 @@
 # Fretbored
 
+![CI](https://github.com/amuribe/fretbored-monorepo/actions/workflows/ci.yml/badge.svg)
+
 An advanced, high-performance music theory engine and fretboard visualizer.
 
 The project is driven by a high-performance, zero-allocation Rust core which handles the complex music theory and instrument logic. Interaction is currently handled via a stylized command-line interface (CLI), with WebAssembly (WASM) and React frontend integration paused for future development.
@@ -16,11 +18,12 @@ The project is driven by a high-performance, zero-allocation Rust core which han
 
 - **Zero-Allocation Architecture:** Replaced runtime file I/O and JSON parsing with compile-time static evaluation. Domain constants live in the binary's `.rodata` segment.
 - **Instrument Registry:** Implemented a static `TuningRegistry` for $O(1)$ lookups of standard and alternate tunings across Guitar, Bass, and Ukulele.
-- **Advanced Theory Engine:** - **Notes & Enharmonics:** Complete Scientific Pitch Notation (SPN) parsing to MIDI, with full support for note spellings and enharmonic equivalents (sharps, flats).
+- **Advanced Theory Engine:** 
+  - **Notes & Enharmonics:** Complete Scientific Pitch Notation (SPN) parsing to MIDI, with full support for note spellings and enharmonic equivalents (sharps, flats).
   - **Intervals & Scales:** Modular interval math driving a generator for Major, Minor, and Pentatonic scales.
   - **Composable Chords:** Highly scalable chord architecture separating base triads (`ChordQuality`) from modular `Extension`s (6ths, 7ths, 9ths, 11ths, 13ths, and alterations).
-  - **Mapping Engine:** Implemented an $O(1)$ bitmask search algorithm to map theoretical note clusters onto physical coordinate matrices.
-  - - **Voicing Engine:** Sliding window backtracking search across the fretboard to enumerate playable chord shapes. Validates voicings via 12-bit pitch-class bitmask with configurable strictness (capo position, max hand stretch, open strings, completeness).
+  - **Mapping Engine:** Scans the fretboard (strings x frets) with a 12-bit pitch-class bitmask, making each note-membership check $O(1)$, and returns every matching `(string, fret)` coordinate.
+  - **Voicing Engine:** Sliding window backtracking search across the fretboard to enumerate playable chord shapes. Validates voicings via 12-bit pitch-class bitmask with configurable strictness (capo position, max hand stretch, open strings, completeness).
 
 ---
 
