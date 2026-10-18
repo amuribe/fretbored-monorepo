@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+    check:
+        runs-on: ubuntu-latest
+        defaults:
+          run:
+            working-directory: core_engine
+        steps:
+            - uses: actions/checkout@v7
+            - uses: dtolnay/rust-toolchain@stable
+              with:
+                components: rustfmt, clippy
+            - uses: Swatinem/rust-cache@v2
+              with:
+                workspaces: core_engine
+            - run: cargo fmt --check
+            - run: cargo clippy --all-targets -- -D warnings
+            - run: cargo test
