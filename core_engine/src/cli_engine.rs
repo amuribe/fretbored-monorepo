@@ -1,14 +1,14 @@
-use std::str::FromStr;
 use crate::cli_error::CliError;
 use crate::instrument::registry::get_tuning;
 use crate::instrument::{FretBoardConfig, Orientation, Tuning};
 use crate::mapping::{NoteCoordinate, find_notes_on_fretboard};
+use crate::theory::Note;
 use crate::theory::chord::Chord;
 use crate::theory::note::NoteSpelling;
 use crate::theory::scale::{ScaleType, generate_scale};
-use crate::theory::Note;
 use crate::voicing::{VoicingConfig, generate_voicing};
 use crate::voicing_ranker::{RankingStrategy, VoicingScore, rank_voicings};
+use std::str::FromStr;
 
 /// Resolve a tuning registry key such as "guitar/standard" into a tuning.
 pub fn resolve_tuning(key: &str) -> Result<Tuning<'static>, CliError> {
@@ -65,12 +65,11 @@ pub fn build_scale_map(
     let config = create_fretboard_config(tuning, fret_count, Orientation::RightHanded);
     let coords = find_notes_on_fretboard(&scale_notes, &config);
 
-
     Ok(ScaleMap {
         notes: scale_notes,
         coords,
         tuning,
-        prefer_flat: root.as_bytes().get(1) == Some(&b'b')
+        prefer_flat: root.as_bytes().get(1) == Some(&b'b'),
     })
 }
 
@@ -84,10 +83,13 @@ fn spell_note(note: Note, prefer_flat: bool) -> String {
 
 /// Format the notes of the scale separated by commas, using the preferred spelling (flat or sharp) based on the root note.
 pub fn format_scale_notes(scale_map: &ScaleMap) -> String {
-    scale_map.notes.iter().map(|&note| spell_note(note, scale_map.prefer_flat))
-    .collect::<Vec<_>>().join(", ")
+    scale_map
+        .notes
+        .iter()
+        .map(|&note| spell_note(note, scale_map.prefer_flat))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
-
 
 /// Chord pipeline:
 /// Chord -> find_notes_on_fretboard -> generate_voicings -> rank_voicings
