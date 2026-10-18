@@ -2,10 +2,18 @@
 name = "core_engine"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
+description = "Music theory engine and string instrument fretboard chord voicing tool"
+license = "MIT"
+repository = "https://github.com/amuribe/fretbored-monorepo"
+keywords = ["music-theory", "chords", "cli", "guitar", "banjo", "ukelele", "mandolin"]
+categories = ["command-line-utilities"]
+publish = false
 
 [[bin]]
 name = "fretbored"
 path = "src/main.rs"
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
