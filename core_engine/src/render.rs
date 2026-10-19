@@ -1,5 +1,5 @@
 use crate::{instrument::FretBoardConfig, mapping::NoteCoordinate, theory::Note};
-use std::fmt::Write;
+use std::fmt::{self, Write};
 use std::ops::RangeInclusive;
 
 // Highest fret the renderer can draw: this is limited by a u64 bitmask
@@ -43,14 +43,21 @@ impl ColorScheme {
         capo: "\x1b[1;35m",        // Bold Magenta
         reset: "\x1b[0m",
     };
+    pub const NONE: Self = Self {
+        string_line: "",
+        fret_wire: "",
+        active_note: "",
+        root_note: "",
+        dimmed: "",
+        capo: "",
+        reset: "",
+    };
     #[inline]
-    pub fn colour(&self, buf: &mut String, enabled: bool, code: &str, text: &str) {
-        if enabled && !code.is_empty() {
-            buf.push_str(code);
-            buf.push_str(text);
-            buf.push_str(self.reset);
+    pub fn colour<W: Write>(&self, buf: &mut W, code: &str, text: &str) -> fmt::Result {
+        if !code.is_empty() {
+            write!(buf, "{}{}{}", code, text, self.reset)
         } else {
-            buf.push_str(text);
+            buf.write_str(text)
         }
     }
 }
@@ -73,10 +80,8 @@ pub struct RenderOptions {
     pub capo: u8,
     pub label_mode: LabelMode,
     pub show_inlays: bool,
-    /// ANSI color codes are shown
-    pub color: bool,
-    /// Color scheme for the fretboard. Only used if `color` is true.
-    pub scheme: ColorScheme,
+    /// Color scheme for the fretboard. `None` disables ANSI colors.
+    pub scheme: Option<ColorScheme>,
 }
 
 impl Default for RenderOptions {
@@ -88,8 +93,7 @@ impl Default for RenderOptions {
             capo: 0,
             label_mode: LabelMode::default(),
             show_inlays: true,
-            color: true,
-            scheme: ColorScheme::default(),
+            scheme: Some(ColorScheme::default()),
         }
     }
 }
@@ -103,10 +107,19 @@ pub fn render_fretboard(
     coords: &[NoteCoordinate],
     options: &RenderOptions,
 ) -> String {
-    // Allocate appropriate space depending on color option
-    let capacity = if options.color { 2048 } else { 512 };
+    let capacity = if options.scheme.is_some() { 2048 } else { 512 };
     let mut fretboard_str = String::with_capacity(capacity);
+    render_fretboard_to(&mut fretboard_str, config, coords, options)
+        .expect("writing to a String cannot fail");
+    fretboard_str
+}
 
+pub fn render_fretboard_to<W: Write>(
+    writer: &mut W,
+    config: &FretBoardConfig<'_>,
+    coords: &[NoteCoordinate],
+    options: &RenderOptions,
+) -> fmt::Result {
     let first_fret = *options.fret_range.start();
     // Clamp the last fret to the config's fret count
     let last_fret = (*options.fret_range.end())
@@ -114,6 +127,9 @@ pub fn render_fretboard(
         .min(MAX_FRET);
     // The effective fret range
     let frets = first_fret..=last_fret;
+    let open = config.tuning.strings;
+    let labels = label_table(options.label_mode, options.use_flats, options.root);
+    let scheme = options.scheme.as_ref().unwrap_or(&ColorScheme::NONE);
 
     // Prepopulate a bitmask of what's being fretted for quick lookup
     let mut active_frets = vec![0_u64; config.tuning.strings.len()];
@@ -127,32 +143,30 @@ pub fn render_fretboard(
     }
 
     // Draw the fretboard header with fret numbers
-    fretboard_str.push_str("   "); // 3 spaces matches the margin for the string labels
+    writer.write_str("   ")?; // 3 spaces matches the margin for the string labels
     for fret in frets.clone() {
         // 2-char right-aligned number + 1 space (cell right) + 1 space (fret wire) = 4 chars
-        let _ = write!(fretboard_str, "{:>2}  ", fret);
+        write!(writer, "{:>2}  ", fret)?;
     }
-    fretboard_str.push('\n');
 
     // Iterate from the highest string to the lowest string (top to bottom)
-    for (string_index, &active_mask) in active_frets.iter().enumerate().rev() {
+    for string_index in (0..active_frets.len()).rev() {
+        let active_mask = active_frets[string_index];
+        writer.write_char('\n')?;
         // Draw the string label (note name) at the start of the row
-        let string_label = config
-            .tuning
-            .note_at_fret(string_index, 0)
-            .map(|note| format_string_label(note, options.use_flats))
-            .unwrap_or("?  ");
-        fretboard_str.push_str(string_label);
-
-        let scheme = &options.scheme;
+        write!(
+            writer,
+            "{:<3}",
+            Note::from_midi(open[string_index].0).name(options.use_flats)
+        )?;
         // Iterate over each fret on the string in the specified range and draw the fretboard cell
         for fret in frets.clone() {
             let is_active = (active_mask & (1_u64 << fret)) != 0;
             let below_capo = options.capo > 0 && fret < options.capo;
             let at_capo = options.capo > 0 && fret == options.capo;
 
-            let note_opt = config.tuning.note_at_fret(string_index, fret);
-            let is_root = matches!((options.root, note_opt), (Some(r), Some(n)) if r == n);
+            let note = Note::from_midi(open[string_index].0 + fret);
+            let is_root = options.root == Some(note);
 
             // Draw the fret cell
             if is_active {
@@ -164,14 +178,9 @@ pub fn render_fretboard(
                             "─●─"
                         }
                     }
-                    LabelMode::NoteName => note_opt
-                        .map(|note| format_note_cell(note, options.use_flats, is_root))
-                        .unwrap_or("─X─"),
-                    LabelMode::Interval => match (options.root, note_opt) {
-                        (Some(root), Some(note)) => format_interval_cell(root, note),
-                        (None, Some(note)) => format_note_cell(note, options.use_flats, false),
-                        _ => "─X─",
-                    },
+                    LabelMode::NoteName | LabelMode::Interval => {
+                        labels[is_root as usize][note.value() as usize]
+                    }
                 };
 
                 // Determine how the cell should be colored based on the options and state
@@ -183,16 +192,16 @@ pub fn render_fretboard(
                     scheme.active_note
                 };
                 // Apply style to the current fret cell
-                scheme.colour(&mut fretboard_str, options.color, code, cell);
+                scheme.colour(writer, code, cell)?;
             } else if at_capo {
                 // Draw the capo bar
-                scheme.colour(&mut fretboard_str, options.color, scheme.capo, "─┃─");
+                scheme.colour(writer, scheme.capo, "─┃─")?;
             } else if below_capo {
                 // Draw dimmed string segments for frets below the capo
-                scheme.colour(&mut fretboard_str, options.color, scheme.dimmed, "╌╌╌");
+                scheme.colour(writer, scheme.dimmed, "╌╌╌")?;
             } else {
                 // Draw the empty string segment for frets above the capo
-                scheme.colour(&mut fretboard_str, options.color, scheme.string_line, "───");
+                scheme.colour(writer, scheme.string_line, "───")?;
             }
 
             // Draw the fret wire/separator
@@ -203,115 +212,64 @@ pub fn render_fretboard(
                 scheme.fret_wire
             };
 
-            scheme.colour(&mut fretboard_str, options.color, sep_code, sep);
+            scheme.colour(writer, sep_code, sep)?;
         }
-        // Mark the end of the string row
-        fretboard_str.push('\n');
     }
 
     // Draw the fret inlays if enabled
     if options.show_inlays {
-        fretboard_str.push_str("   "); // 3 spaces matches the margin for the string labels
+        writer.write_char('\n')?;
+        writer.write_str("   ")?; // 3 spaces matches the margin for the string labels
         for fret in frets.clone() {
             if fret > config.fret_count {
                 break;
             }
-            fretboard_str.push_str(format_inlay_cell(fret));
+            writer.write_str(format_inlay_cell(fret))?;
         }
-        fretboard_str.push('\n');
     }
 
-    // Remove the last newline for cleaner output
-    fretboard_str.pop();
-
-    fretboard_str
+    Ok(())
 }
 
-/// Helper function to return fret cell based on note
-const fn format_note_cell(note: Note, use_flats: bool, is_root: bool) -> &'static str {
-    if is_root {
-        match (note, use_flats) {
-            (Note::C, _) => "[C]",
-            (Note::CSharp, false) => "[C#",
-            (Note::CSharp, true) => "[Db",
-            (Note::D, _) => "[D]",
-            (Note::DSharp, false) => "[D#",
-            (Note::DSharp, true) => "[Eb",
-            (Note::E, _) => "[E]",
-            (Note::F, _) => "[F]",
-            (Note::FSharp, false) => "[F#",
-            (Note::FSharp, true) => "[Gb",
-            (Note::G, _) => "[G]",
-            (Note::GSharp, false) => "[G#",
-            (Note::GSharp, true) => "[Ab",
-            (Note::A, _) => "[A]",
-            (Note::ASharp, false) => "[A#",
-            (Note::ASharp, true) => "[Bb",
-            (Note::B, _) => "[B]",
-        }
+const INTERVAL_NAMES: [&str; 12] = [
+    "─R─", "─b2", "─2─", "─b3", "─3─", "─4─", "─b5", "─5─", "─b6", "─6─", "─b7", "─7─",
+];
+
+const fn label_table(mode: LabelMode, use_flats: bool, root: Option<Note>) -> [[&'static str; 12]; 2] {
+    let names = if use_flats {
+        [
+            "─C─", "─Db", "─D─", "─Eb", "─E─", "─F─", "─Gb", "─G─", "─Ab", "─A─", "─Bb", "─B─",
+        ]
     } else {
-        match (note, use_flats) {
-            (Note::C, _) => "─C─",
-            (Note::CSharp, false) => "─C#",
-            (Note::CSharp, true) => "─Db",
-            (Note::D, _) => "─D─",
-            (Note::DSharp, false) => "─D#",
-            (Note::DSharp, true) => "─Eb",
-            (Note::E, _) => "─E─",
-            (Note::F, _) => "─F─",
-            (Note::FSharp, false) => "─F#",
-            (Note::FSharp, true) => "─Gb",
-            (Note::G, _) => "─G─",
-            (Note::GSharp, false) => "─G#",
-            (Note::GSharp, true) => "─Ab",
-            (Note::A, _) => "─A─",
-            (Note::ASharp, false) => "─A#",
-            (Note::ASharp, true) => "─Bb",
-            (Note::B, _) => "─B─",
+        [
+            "─C─", "─C#", "─D─", "─D#", "─E─", "─F─", "─F#", "─G─", "─G#", "─A─", "─A#", "─B─",
+        ]
+    };
+    let roots = if use_flats {
+        [
+            "[C]", "[Db", "[D]", "[Eb", "[E]", "[F]", "[Gb", "[G]", "[Ab", "[A]", "[Bb", "[B]",
+        ]
+    } else {
+        [
+            "[C]", "[C#", "[D]", "[D#", "[E]", "[F]", "[F#", "[G]", "[G#", "[A]", "[A#", "[B]",
+        ]
+    };
+    match mode {
+        LabelMode::Dot => [["─●─"; 12], ["─◆─"; 12]],
+        LabelMode::NoteName => [names, roots],
+        LabelMode::Interval => {
+            if let Some(root) = root {
+                let mut intervals = ["─X─"; 12];
+                let mut index = 0;
+                while index < 12 {
+                    intervals[index] = INTERVAL_NAMES[(index + 12 - root.value() as usize) % 12];
+                    index += 1;
+                }
+                [intervals, intervals]
+            } else {
+                [names, roots]
+            }
         }
-    }
-}
-
-/// Helper function to return fret cell based on interval
-const fn format_interval_cell(root: Note, target: Note) -> &'static str {
-    let semitones = (target.value() + 12 - root.value()) % 12;
-    match semitones {
-        0 => "─R─",  // Unison / Root
-        1 => "─b2",  // MinorSecond
-        2 => "─2─",  // MajorSecond
-        3 => "─b3",  // MinorThird
-        4 => "─3─",  // MajorThird
-        5 => "─4─",  // PerfectFourth
-        6 => "─b5",  // Tritone
-        7 => "─5─",  // PerfectFifth
-        8 => "─b6",  // MinorSixth
-        9 => "─6─",  // MajorSixth
-        10 => "─b7", // MinorSeventh
-        11 => "─7─", // MajorSeventh
-        _ => unreachable!(),
-    }
-}
-
-/// Helper function to return the string label (note followed by a space)
-const fn format_string_label(note: Note, use_flats: bool) -> &'static str {
-    match (note, use_flats) {
-        (Note::C, _) => "C  ",
-        (Note::CSharp, false) => "C# ",
-        (Note::CSharp, true) => "Db ",
-        (Note::D, _) => "D  ",
-        (Note::DSharp, false) => "D# ",
-        (Note::DSharp, true) => "Eb ",
-        (Note::E, _) => "E  ",
-        (Note::F, _) => "F  ",
-        (Note::FSharp, false) => "F# ",
-        (Note::FSharp, true) => "Gb ",
-        (Note::G, _) => "G  ",
-        (Note::GSharp, false) => "G# ",
-        (Note::GSharp, true) => "Ab ",
-        (Note::A, _) => "A  ",
-        (Note::ASharp, false) => "A# ",
-        (Note::ASharp, true) => "Bb ",
-        (Note::B, _) => "B  ",
     }
 }
 
@@ -500,7 +458,6 @@ mod tests {
             label_mode: LabelMode::Interval,
             root: Some(Note::A),
             capo: 2,
-            color: true,
             ..Default::default()
         };
 
@@ -540,7 +497,6 @@ mod tests {
             root: Some(Note::A),
             capo: 2,
             label_mode: LabelMode::Interval,
-            color: true,
             ..Default::default()
         };
 
@@ -563,7 +519,7 @@ mod tests {
         }];
         let options = RenderOptions {
             fret_range: 0..=100,
-            color: false,
+            scheme: None,
             ..Default::default()
         };
         let diagram = render_fretboard(&config, &coords, &options);
