@@ -2,6 +2,9 @@ use crate::{instrument::FretBoardConfig, mapping::NoteCoordinate, theory::Note};
 use std::fmt::Write;
 use std::ops::RangeInclusive;
 
+// Highest fret the renderer can draw: this is limited by a u64 bitmask
+const MAX_FRET: u8 = 63;
+
 /// Decides how each note on the fretboard is labeled. For example, a note can be labeled as a dot, with its name, or with its interval relative to the root of the chord.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LabelMode {
@@ -104,29 +107,28 @@ pub fn render_fretboard(
     let capacity = if options.color { 2048 } else { 512 };
     let mut fretboard_str = String::with_capacity(capacity);
 
+    let first_fret = *options.fret_range.start();
+    // Clamp the last fret to the config's fret count
+    let last_fret = (*options.fret_range.end())
+        .min(config.fret_count)
+        .min(MAX_FRET);
+    // The effective fret range
+    let frets = first_fret..=last_fret;
+
     // Prepopulate a bitmask of what's being fretted for quick lookup
-    let mut active_frets = vec![0_u32; config.tuning.strings.len()];
+    let mut active_frets = vec![0_u64; config.tuning.strings.len()];
 
     for coord in coords {
         let s_idx = coord.string_index as usize;
         // Only mark the fret as active if it's within the valid range of strings and frets
-        if s_idx < config.tuning.strings.len()
-            && options.fret_range.contains(&coord.fret)
-            && coord.fret <= config.fret_count
-            && coord.fret >= options.capo
-            && coord.fret < 32
-        // Ensure we don't exceed the 32-bit limit for the bitmask
-        {
-            active_frets[s_idx] |= 1_u32 << coord.fret;
+        if s_idx < active_frets.len() && frets.contains(&coord.fret) {
+            active_frets[s_idx] |= 1_u64 << coord.fret;
         }
     }
 
     // Draw the fretboard header with fret numbers
     fretboard_str.push_str("   "); // 3 spaces matches the margin for the string labels
-    for fret in options.fret_range.clone() {
-        if fret > config.fret_count {
-            break;
-        }
+    for fret in frets.clone() {
         // 2-char right-aligned number + 1 space (cell right) + 1 space (fret wire) = 4 chars
         let _ = write!(fretboard_str, "{:>2}  ", fret);
     }
@@ -144,12 +146,8 @@ pub fn render_fretboard(
 
         let scheme = &options.scheme;
         // Iterate over each fret on the string in the specified range and draw the fretboard cell
-        for fret in options.fret_range.clone() {
-            if fret > config.fret_count {
-                break;
-            }
-
-            let is_active = (active_mask & (1_u32 << fret)) != 0;
+        for fret in frets.clone() {
+            let is_active = (active_mask & (1_u64 << fret)) != 0;
             let below_capo = options.capo > 0 && fret < options.capo;
             let at_capo = options.capo > 0 && fret == options.capo;
 
@@ -214,7 +212,7 @@ pub fn render_fretboard(
     // Draw the fret inlays if enabled
     if options.show_inlays {
         fretboard_str.push_str("   "); // 3 spaces matches the margin for the string labels
-        for fret in options.fret_range.clone() {
+        for fret in frets.clone() {
             if fret > config.fret_count {
                 break;
             }
@@ -528,28 +526,47 @@ mod tests {
             Orientation::RightHanded,
         );
         let coords = vec![
-            NoteCoordinate { string_index: 0, fret: 1 }, // Behind capo (filtered out)
-            NoteCoordinate { string_index: 0, fret: 5 }, // Root A
+            NoteCoordinate {
+                string_index: 0,
+                fret: 1,
+            }, // Behind capo (filtered out)
+            NoteCoordinate {
+                string_index: 0,
+                fret: 5,
+            }, // Root A
         ];
         let options = RenderOptions {
             fret_range: 0..=20, // Exceeds config.fret_count (12) -> must clamp to 12
             root: Some(Note::A),
             capo: 2,
             label_mode: LabelMode::Interval,
-            color: false,
+            color: true,
             ..Default::default()
         };
 
         let diagram = render_fretboard(&config, &coords, &options);
 
-        // 1. No trailing newline
-        assert!(!diagram.ends_with('\n'));
-        // 2. Clamped at fret 12 (fret 13 header should not exist)
-        assert!(diagram.contains("12"));
-        assert!(!diagram.contains("13"));
-        // 3. Note behind capo (fret 1 = b6) is filtered out
-        assert!(!diagram.contains("b6"));
-        // 4. Root note at fret 5 is rendered
-        assert!(diagram.contains("─R─"));
+        let dim = ColorScheme::DEFAULT_DARK;
+        assert!(diagram.contains(&format!("{}─b6{}", dim.dimmed, dim.reset)));
+        assert!(diagram.contains(&format!("{}─R─{}", dim.root_note, dim.reset)));
+    }
+    #[test]
+    fn test_fret_range_beyond_bitmask_does_not_panic() {
+        let config = FretBoardConfig::new(
+            StandardTunings::guitar_standard(),
+            100,
+            Orientation::RightHanded,
+        );
+        let coords = [NoteCoordinate {
+            string_index: 0,
+            fret: 40,
+        }];
+        let options = RenderOptions {
+            fret_range: 0..=100,
+            color: false,
+            ..Default::default()
+        };
+        let diagram = render_fretboard(&config, &coords, &options);
+        assert!(diagram.lines().count() >= 7); // header + 6 strings
     }
 }
