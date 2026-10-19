@@ -4,6 +4,7 @@ pub mod cli_error;
 pub mod instrument;
 pub mod mapping;
 pub mod output;
+pub mod render;
 pub mod theory;
 pub mod voicing;
 pub mod voicing_ranker;
