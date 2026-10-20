@@ -235,7 +235,11 @@ const INTERVAL_NAMES: [&str; 12] = [
     "─R─", "─b2", "─2─", "─b3", "─3─", "─4─", "─b5", "─5─", "─b6", "─6─", "─b7", "─7─",
 ];
 
-const fn label_table(mode: LabelMode, use_flats: bool, root: Option<Note>) -> [[&'static str; 12]; 2] {
+const fn label_table(
+    mode: LabelMode,
+    use_flats: bool,
+    root: Option<Note>,
+) -> [[&'static str; 12]; 2] {
     let names = if use_flats {
         [
             "─C─", "─Db", "─D─", "─Eb", "─E─", "─F─", "─Gb", "─G─", "─Ab", "─A─", "─Bb", "─B─",
