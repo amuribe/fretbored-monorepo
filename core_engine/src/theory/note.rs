@@ -102,6 +102,21 @@ pub enum Note {
 }
 
 impl Note {
+    pub const SHARP: [&'static str; 12] = [
+        "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+    ];
+    pub const FLAT: [&'static str; 12] = [
+        "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B",
+    ];
+
+    pub const fn name(self, use_flats: bool) -> &'static str {
+        if use_flats {
+            Self::FLAT[self.value() as usize]
+        } else {
+            Self::SHARP[self.value() as usize]
+        }
+    }
+
     // Convert an abs MIDI note number to a pitch
     // Modulo wraps so note must be 0-11
     pub fn from_midi(midi_val: u8) -> Self {
