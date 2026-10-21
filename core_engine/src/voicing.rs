@@ -225,6 +225,21 @@ pub fn calculate_open_count(voicing: &Voicing) -> usize {
     voicing.frets.iter().filter(|&&x| x == Some(0)).count()
 }
 
+/// Helper to convert voicning to a collection of NoteCoords
+pub fn voicing_to_coords(voicing: &Voicing) -> Vec<NoteCoordinate> {
+    voicing
+        .frets
+        .iter()
+        .enumerate()
+        .filter_map(|(string_index, fret)| {
+            fret.map(|fret| NoteCoordinate {
+                string_index: string_index as u8,
+                fret,
+            })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -348,6 +363,48 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn voicing_to_coords_omits_muted_and_keeps_string_indices() {
+        let v = Voicing {
+            frets: vec![None, Some(3), None, Some(0)],
+        };
+        assert_eq!(
+            voicing_to_coords(&v),
+            vec![
+                NoteCoordinate {
+                    string_index: 1,
+                    fret: 3
+                },
+                NoteCoordinate {
+                    string_index: 3,
+                    fret: 0
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn voicing_to_coords_all_muted_is_empty() {
+        let v = Voicing {
+            frets: vec![None; 6],
+        };
+        assert!(voicing_to_coords(&v).is_empty());
+    }
+
+    #[test]
+    fn voicing_to_coords_orders_by_string() {
+        let v = Voicing {
+            frets: vec![Some(0), Some(3), Some(2), Some(0), Some(1), Some(0)],
+        };
+        let coords = voicing_to_coords(&v);
+        assert_eq!(coords.len(), 6);
+        assert!(
+            coords
+                .windows(2)
+                .all(|w| w[0].string_index < w[1].string_index)
+        );
     }
 
     mod benches {
