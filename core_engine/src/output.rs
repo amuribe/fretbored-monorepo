@@ -16,7 +16,7 @@ pub struct VoicingDisplay<'a> {
 }
 
 impl<'a> VoicingDisplay<'a> {
-    pub fn new(voicing: Voicing, tuning: &'a Tuning<'a>) -> Self {
+    pub fn new(voicing: Voicing, tuning: &'a Tuning<'a>, use_flats: bool) -> Self {
         let note_names = voicing
             .frets
             .iter()
@@ -24,7 +24,7 @@ impl<'a> VoicingDisplay<'a> {
             .map(|(string_idx, fret_opt)| match fret_opt {
                 Some(fret) => tuning
                     .note_at_fret(string_idx, *fret)
-                    .map(|n| format!("{:?}", n))
+                    .map(|n| n.name(use_flats).to_string())
                     .unwrap_or_else(|| "-".to_string()),
                 None => "-".to_string(),
             })
@@ -38,7 +38,7 @@ impl<'a> VoicingDisplay<'a> {
     }
 }
 
-pub fn format_voicing(voicing: &Voicing, tuning: &Tuning) -> String {
+pub fn format_voicing(voicing: &Voicing, tuning: &Tuning, use_flats: bool) -> String {
     // Build the fret array: e.g. G [3, 2, 0, 0, 3, 3]
     // "-" = empty or muted string
     let fret_str = format!(
@@ -55,25 +55,25 @@ pub fn format_voicing(voicing: &Voicing, tuning: &Tuning) -> String {
     );
 
     // Get the note name at each fret, depending on tuning / instrument
-    let note_names: Vec<String> = voicing
+    let note_names: Vec<&str> = voicing
         .frets
         .iter()
         .enumerate()
         .map(|(string_idx, fret_opt)| match fret_opt {
             Some(fret) => tuning
                 .note_at_fret(string_idx, *fret)
-                .map(|n| format!("{:?}", n))
-                .unwrap_or_else(|| "X".to_string()),
-            None => "-".to_string(),
+                .map(|n| n.name(use_flats))
+                .unwrap_or("X"),
+            None => "-",
         })
         .collect();
 
     format!("Frets: {} | Notes: {}", fret_str, note_names.join(" "))
 }
 
-pub fn format_voicing_w_playability(voicing: &Voicing, tuning: &Tuning) -> String {
+pub fn format_voicing_w_playability(voicing: &Voicing, tuning: &Tuning, use_flats: bool) -> String {
     // Format voicing to string with plauability information
-    let base_str = format_voicing(voicing, tuning);
+    let base_str = format_voicing(voicing, tuning, use_flats);
 
     // Calculate the largest stretch in the voicing, ignoring open strings and muted strings
     let stretch = calculate_stretch(voicing);
@@ -93,7 +93,7 @@ mod tests {
             frets: vec![Some(0), Some(3), Some(2), None, Some(1), Some(0)],
         };
         let tuning = StandardTunings::guitar_standard();
-        let formatted = format_voicing(&voicing, &tuning);
+        let formatted = format_voicing(&voicing, &tuning, false);
         assert!(formatted.contains("[0, 3, 2, -, 1, 0]"));
         assert!(formatted.contains("Frets:"));
         assert!(formatted.contains("Notes:"));
@@ -105,7 +105,7 @@ mod tests {
             frets: vec![None, Some(3), Some(2), Some(0), Some(1), Some(0)],
         };
         let tuning = StandardTunings::guitar_standard();
-        let formatted = format_voicing_w_playability(&voicing, &tuning);
+        let formatted = format_voicing_w_playability(&voicing, &tuning, false);
         assert!(formatted.contains("Stretch: 2"));
         assert!(
             formatted.contains("Open: 2"),

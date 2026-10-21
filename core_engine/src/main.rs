@@ -6,8 +6,8 @@ use clap::Parser;
 use cli::{Cli, Commands};
 use core_engine::chord_parser::{parse_chord_parts, parse_chord_symbol};
 use core_engine::cli_engine::{
-    build_scale_map, create_fretboard_config, format_scale_notes, generate_ranked_voicings,
-    print_chord_intervals, resolve_tuning,
+    build_scale_map, create_fretboard_config, decide_use_flats, format_scale_notes,
+    generate_ranked_voicings, print_chord_intervals, resolve_fret_count, resolve_instrument_preset,
 };
 use core_engine::cli_error::CliError;
 use core_engine::instrument::Orientation;
@@ -35,6 +35,7 @@ fn run() -> Result<(), CliError> {
             intervals,
             instrument,
             voicings,
+            ..
         } => run_chord(
             args,
             intervals,
@@ -42,13 +43,14 @@ fn run() -> Result<(), CliError> {
             voicings,
             cli.max_stretch,
             cli.capo,
+            cli.frets,
         ),
 
-        Commands::Identify { frets, instrument } => {
+        Commands::Identify { shape, instrument } => {
             // TODO: implement
             eprintln!(
-                "Identify command has not been implemented yet: frets={:?}, instrument={}",
-                frets, instrument
+                "Identify command has not been implemented yet: shape={:?}, instrument={}",
+                shape, instrument
             );
             Ok(())
         }
@@ -68,6 +70,7 @@ fn run_chord(
     voicing_count: usize,
     max_stretch: u8,
     capo: u8,
+    frets: Option<u8>,
 ) -> Result<(), CliError> {
     let parsed = match args.as_slice() {
         [symbol] => parse_chord_symbol(symbol),
@@ -86,7 +89,7 @@ fn run_chord(
     }
 
     // Decide enharmonic spelling for the chord notes based on the input
-    let prefer_flat = args.iter().any(|arg| arg.contains('b') || arg == "minor");
+    let prefer_flat = decide_use_flats(&args);
 
     let note_names = chord
         .notes
@@ -102,8 +105,11 @@ fn run_chord(
 
     println!("Chord: {}", note_names.join(", "));
 
-    let tuning = resolve_tuning(&instrument)?;
-    let fretboard_config = create_fretboard_config(tuning, 24, Orientation::RightHanded);
+    // Instrument and tuning
+    let preset = resolve_instrument_preset(&instrument)?;
+    let fret_count = resolve_fret_count(&preset, frets, capo)?;
+    let fretboard_config =
+        create_fretboard_config(preset.tuning, fret_count, Orientation::RightHanded);
     let voicing_config = VoicingConfig {
         max_stretch,
         capo_fret: capo,
@@ -124,7 +130,7 @@ fn run_chord(
             "{}. Score {} | {}",
             index + 1,
             scored.score,
-            format_voicing_w_playability(&scored.voicing, &fretboard_config.tuning,)
+            format_voicing_w_playability(&scored.voicing, &fretboard_config.tuning, prefer_flat)
         );
     }
 
