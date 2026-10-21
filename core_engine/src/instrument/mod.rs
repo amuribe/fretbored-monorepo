@@ -1,5 +1,7 @@
 pub mod registry;
+pub mod spec;
 pub mod tuning;
+pub use spec::*;
 pub use tuning::*;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]

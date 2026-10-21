@@ -3,7 +3,7 @@ use std::fmt::{self, Write};
 use std::ops::RangeInclusive;
 
 // Highest fret the renderer can draw: this is limited by a u64 bitmask
-const MAX_FRET: u8 = 63;
+pub const MAX_FRET: u8 = 63;
 
 /// Decides how each note on the fretboard is labeled. For example, a note can be labeled as a dot, with its name, or with its interval relative to the root of the chord.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
