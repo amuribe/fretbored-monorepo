@@ -1,4 +1,11 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum LabelArg {
+    Note,
+    Dot,
+    Interval,
+}
 
 #[derive(Debug, Parser)]
 #[command(
@@ -25,6 +32,10 @@ pub struct Cli {
     #[arg(short = 'c', long, default_value_t = 0, global = true)]
     pub capo: u8,
 
+    /// Number of frets to use, defaults to the instrument's fret count
+    #[arg(short = 'f', long, global = true)]
+    pub frets: Option<u8>,
+
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -50,13 +61,21 @@ pub enum Commands {
         /// Number of ranked voicings to display
         #[arg(short = 'n', long, default_value_t = 5)]
         voicings: usize,
+
+        /// How the fretboard diagram should be labeled.
+        #[arg(short = 'l', long, value_enum, default_value_t = LabelArg::Note)]
+        label: LabelArg,
+
+        /// Disable ANSI colors in the fretboard diagram.
+        #[arg(long)]
+        no_color: bool,
     },
 
     /// Identify a chord from a comma separated fret shape.
     Identify {
-        /// Frets as CSV, Example(Open G on guitar e standard): "3,2,0,0,3,3".
+        /// Frets/Chord shape as CSV, Example(Open G on guitar e standard): "3,2,0,0,3,3".
         #[arg(required = true)]
-        frets: String,
+        shape: String,
 
         /// Intrument tuning registry key, e.g. "guitar/standard" or "banjo/standard".
         #[arg(short = 'i', long, default_value = "guitar/standard")]
@@ -110,6 +129,7 @@ mod tests {
                 intervals,
                 instrument,
                 voicings,
+                ..
             } => {
                 assert_eq!(args, vec!["Cm7"]);
                 assert!(!intervals);

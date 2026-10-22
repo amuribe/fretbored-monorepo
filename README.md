@@ -51,9 +51,17 @@ The project is driven by a high-performance, zero-allocation Rust core which han
 
 ### Phase 5: Stylized CLI (Current Phase)
 
-- [ ] Scaffold interactive command-line interface.
-- [ ] Implement query menus for tuning selection and chord/scale generation.
-- [ ] Build terminal renderer for the 2D fretboard coordinate matrix.
+- [x] Scaffold command-line interface (`chord`, `scale`, `identify`).
+- [x] Build terminal renderer for chord voicings (`render_fretboard`, muted markers, labels, color control).
+- [x] Resolve fret count from instrument presets, with `--frets` override.
+- [ ] Render scale diagrams (`scale` command currently prints notes only, and hardcodes 24 frets).
+- [ ] Implement `identify` (currently a stub).
+- [ ] Improve help text and examples for every subcommand.
+- [ ] Add `--help` descriptions for all flags, including `--label`, `--no-color`, `--frets`.
+- [ ] Validate and document `--instrument` keys, with a `list` subcommand or error hint.
+- [ ] Friendly error messages for unknown tunings and out-of-range values.
+- [ ] Handle broken pipes cleanly (`println!` panics on `EPIPE`).
+- [ ] Respect `NO_COLOR` and non-TTY output in all subcommands.
 
 ### Phase 6: Deep Theory & DSP Expansion
 

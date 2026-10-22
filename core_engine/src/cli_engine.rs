@@ -1,7 +1,8 @@
 use crate::cli_error::CliError;
-use crate::instrument::registry::get_tuning;
-use crate::instrument::{FretBoardConfig, Orientation, Tuning};
+use crate::instrument::registry::{get_instrument_preset, get_tuning};
+use crate::instrument::{FretBoardConfig, InstrumentPreset, Orientation, Tuning};
 use crate::mapping::{NoteCoordinate, find_notes_on_fretboard};
+use crate::render::MAX_FRET;
 use crate::theory::Note;
 use crate::theory::chord::Chord;
 use crate::theory::note::NoteSpelling;
@@ -10,9 +11,54 @@ use crate::voicing::{VoicingConfig, generate_voicing};
 use crate::voicing_ranker::{RankingStrategy, VoicingScore, rank_voicings};
 use std::str::FromStr;
 
+pub fn resolve_instrument_preset(key: &str) -> Result<InstrumentPreset, CliError> {
+    get_instrument_preset(key).ok_or_else(|| CliError::UnknownTuning(key.to_string()))
+}
 /// Resolve a tuning registry key such as "guitar/standard" into a tuning.
 pub fn resolve_tuning(key: &str) -> Result<Tuning<'static>, CliError> {
     get_tuning(key).ok_or_else(|| CliError::UnknownTuning(key.to_string()))
+}
+
+/// Fret count to use. If provided use the user's override, else use the instrument's own fret count.
+/// Rejects counts above the renderer limit and a capo beyond the last fret.
+pub fn resolve_fret_count(
+    preset: &InstrumentPreset,
+    requested: Option<u8>,
+    capo: u8,
+) -> Result<u8, CliError> {
+    let fret_count = requested.unwrap_or(preset.instrument.fret_count);
+
+    if fret_count > MAX_FRET {
+        return Err(CliError::InvalidFret {
+            fret: fret_count,
+            max: MAX_FRET,
+        });
+    }
+    if capo > fret_count {
+        return Err(CliError::InvalidFret {
+            fret: capo,
+            max: fret_count,
+        });
+    }
+
+    Ok(fret_count)
+}
+
+/// Flats are preferred when an argument spells one (root flat, "b5", "b9", ...) or the
+/// quality is the word "minor", unless the root itself is sharp: an explicit sharp root wins.
+pub fn decide_use_flats(args: &[String]) -> bool {
+    let Some(root) = args.first() else {
+        return false;
+    };
+
+    if root.as_bytes().get(1) == Some(&b'#') {
+        return false;
+    }
+
+    // A closure used to skip the root letter so a root of "B"/"b" isn't read as a flat.
+    let spells_flat = |s: &str| s.contains('b') || s.to_ascii_lowercase().contains("minor");
+
+    spells_flat(root.get(1..).unwrap_or("")) || args[1..].iter().any(|arg| spells_flat(arg))
 }
 
 /// Create a FretBoardConfig which will be used for mapping notes to frets, and for generating voicings.
@@ -139,4 +185,84 @@ pub fn print_chord_intervals(chord: &Chord) {
             .map(|interval| format!("{interval:?}")),
     );
     println!("{}", interval_names.join(", "));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn s(args: &[&str]) -> Vec<String> {
+        args.iter().map(|a| a.to_string()).collect()
+    }
+
+    fn guitar() -> InstrumentPreset {
+        get_instrument_preset("guitar/standard").unwrap()
+    }
+
+    #[test]
+    fn flat_root_prefers_flats() {
+        assert!(decide_use_flats(&s(&["Ebmaj7"])));
+    }
+
+    #[test]
+    fn plain_root_prefers_sharps() {
+        assert!(!decide_use_flats(&s(&["A"])));
+    }
+
+    #[test]
+    fn minor_word_prefers_flats() {
+        assert!(decide_use_flats(&s(&["G", "minor"])));
+    }
+
+    #[test]
+    fn minor_word_is_case_insensitive() {
+        assert!(decide_use_flats(&s(&["b", "Minor"])));
+    }
+
+    #[test]
+    fn sharp_root_wins_over_flat_extension_and_minor_word() {
+        assert!(!decide_use_flats(&s(&["C#m7b5"])));
+        assert!(!decide_use_flats(&s(&["C#", "minor"])));
+    }
+
+    #[test]
+    fn fret_count_defaults_to_instrument() {
+        assert_eq!(resolve_fret_count(&guitar(), None, 0), Ok(24));
+    }
+
+    #[test]
+    fn fret_count_override_wins() {
+        assert_eq!(resolve_fret_count(&guitar(), Some(12), 0), Ok(12));
+    }
+
+    #[test]
+    fn fret_count_above_renderer_limit_rejected() {
+        assert!(resolve_fret_count(&guitar(), Some(99), 0).is_err());
+    }
+
+    #[test]
+    fn capo_beyond_last_fret_rejected_with_real_max() {
+        assert_eq!(
+            resolve_fret_count(&guitar(), None, 30),
+            Err(CliError::InvalidFret { fret: 30, max: 24 })
+        );
+        assert_eq!(
+            resolve_fret_count(&guitar(), Some(12), 13),
+            Err(CliError::InvalidFret { fret: 13, max: 12 })
+        );
+        assert_eq!(resolve_fret_count(&guitar(), Some(12), 12), Ok(12));
+    }
+
+    #[test]
+    fn b_root_is_not_flat() {
+        assert!(!decide_use_flats(&s(&["B"])));
+        assert!(!decide_use_flats(&s(&["b"])));
+        assert!(!decide_use_flats(&s(&["Bmaj7"])));
+    }
+
+    #[test]
+    fn bb_root_is_flat() {
+        assert!(decide_use_flats(&s(&["Bb"])));
+        assert!(decide_use_flats(&s(&["bb"])));
+    }
 }

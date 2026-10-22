@@ -3,7 +3,7 @@ use std::fmt::{self, Write};
 use std::ops::RangeInclusive;
 
 // Highest fret the renderer can draw: this is limited by a u64 bitmask
-const MAX_FRET: u8 = 63;
+pub const MAX_FRET: u8 = 63;
 
 /// Decides how each note on the fretboard is labeled. For example, a note can be labeled as a dot, with its name, or with its interval relative to the root of the chord.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -82,6 +82,8 @@ pub struct RenderOptions {
     pub show_inlays: bool,
     /// Color scheme for the fretboard. `None` disables ANSI colors.
     pub scheme: Option<ColorScheme>,
+    /// String indices to mark with 'x' in the margin (muted strings)
+    pub muted_strings: Vec<u8>,
 }
 
 impl Default for RenderOptions {
@@ -94,6 +96,7 @@ impl Default for RenderOptions {
             label_mode: LabelMode::default(),
             show_inlays: true,
             scheme: Some(ColorScheme::default()),
+            muted_strings: Vec::new(),
         }
     }
 }
@@ -143,7 +146,7 @@ pub fn render_fretboard_to<W: Write>(
     }
 
     // Draw the fretboard header with fret numbers
-    writer.write_str("   ")?; // 3 spaces matches the margin for the string labels
+    writer.write_str("    ")?; // 3 spaces matches the margin for the string labels
     for fret in frets.clone() {
         // 2-char right-aligned number + 1 space (cell right) + 1 space (fret wire) = 4 chars
         write!(writer, "{:>2}  ", fret)?;
@@ -159,6 +162,15 @@ pub fn render_fretboard_to<W: Write>(
             "{:<3}",
             Note::from_midi(open[string_index].0).name(options.use_flats)
         )?;
+
+        // Mark muted strings with an 'x' in the margin
+        if options.muted_strings.contains(&(string_index as u8)) {
+            scheme.colour(writer, scheme.dimmed, "x")?;
+        } else {
+            // Add a space for non-muted strings to keep the diagram aligned
+            writer.write_char(' ')?;
+        }
+
         // Iterate over each fret on the string in the specified range and draw the fretboard cell
         for fret in frets.clone() {
             let is_active = (active_mask & (1_u64 << fret)) != 0;
@@ -219,7 +231,7 @@ pub fn render_fretboard_to<W: Write>(
     // Draw the fret inlays if enabled
     if options.show_inlays {
         writer.write_char('\n')?;
-        writer.write_str("   ")?; // 3 spaces matches the margin for the string labels
+        writer.write_str("    ")?; // 4 spaces matches the margin for the string labels
         for fret in frets.clone() {
             if fret > config.fret_count {
                 break;
