@@ -16,7 +16,7 @@ use core_engine::output::{format_voicing_w_playability, fret_window};
 use core_engine::render::{ColorScheme, LabelMode, RenderOptions, render_fretboard};
 use core_engine::theory::chord::Chord;
 use core_engine::theory::note::NoteSpelling;
-use core_engine::voicing::{VoicingConfig, voicing_to_coords};
+use core_engine::voicing::{VoicingConfig, muted_strings, voicing_to_coords};
 use core_engine::voicing_ranker::RankingStrategy::MostPlayable;
 
 fn main() -> ExitCode {
@@ -188,6 +188,7 @@ fn run_chord(req: ChordRequest) -> Result<(), CliError> {
             label_mode,
             show_inlays: true,
             scheme,
+            muted_strings: muted_strings(&scored.voicing),
         };
         println!(
             "{}",

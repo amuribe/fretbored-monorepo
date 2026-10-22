@@ -225,6 +225,16 @@ pub fn calculate_open_count(voicing: &Voicing) -> usize {
     voicing.frets.iter().filter(|&&x| x == Some(0)).count()
 }
 
+/// Return the indices of muted strings in a voicing (fret == None)
+pub fn muted_strings(voicing: &Voicing) -> Vec<u8> {
+    voicing
+        .frets
+        .iter()
+        .enumerate()
+        .filter_map(|(i, f)| f.is_none().then_some(i as u8))
+        .collect()
+}
+
 /// Helper to convert voicning to a collection of NoteCoords
 pub fn voicing_to_coords(voicing: &Voicing) -> Vec<NoteCoordinate> {
     voicing
@@ -405,6 +415,14 @@ mod tests {
                 .windows(2)
                 .all(|w| w[0].string_index < w[1].string_index)
         );
+    }
+
+    #[test]
+    fn muted_strings_lists_none_indices() {
+        let v = Voicing {
+            frets: vec![None, Some(3), None, Some(0)],
+        };
+        assert_eq!(muted_strings(&v), vec![0, 2]);
     }
 
     mod benches {
