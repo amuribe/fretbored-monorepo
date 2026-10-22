@@ -84,7 +84,6 @@ pub enum Commands {
 
     /// Display a scale on the fretboard
     Scale {
-        /// Root note, Example: "C", "A", "Bb", "F#"
         #[arg(required = true)]
         root: String,
 
@@ -95,6 +94,10 @@ pub enum Commands {
         /// Instrument tuning registry key, e.g. "guitar/standard" or "banjo/standard".
         #[arg(short = 'i', long, default_value = "guitar/standard")]
         instrument: String,
+
+        /// Disable ANSI colors in the fretboard diagram.
+        #[arg(long)]
+        no_color: bool,
     },
 }
 

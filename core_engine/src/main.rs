@@ -42,6 +42,14 @@ struct ChordRequest {
     no_color: bool,
 }
 
+/// Bundles the args of a Scale command request
+struct ScaleRequest {
+    instrument: String,
+    root: String,
+    scale_type: String,
+    no_color: bool,
+}
+
 fn label_mode(label: LabelArg) -> LabelMode {
     match label {
         LabelArg::Dot => LabelMode::Dot,
@@ -98,7 +106,13 @@ fn run() -> Result<(), CliError> {
             root,
             scale_type,
             instrument,
-        } => run_scale(&root, &scale_type, &instrument),
+            no_color,
+        } => run_scale(ScaleRequest {
+            root,
+            scale_type,
+            instrument,
+            no_color,
+        }),
     }
 }
 
@@ -203,9 +217,37 @@ fn run_chord(req: ChordRequest) -> Result<(), CliError> {
     Ok(())
 }
 
-fn run_scale(root: &str, scale_name: &str, instrument: &str) -> Result<(), CliError> {
-    let scale_map = build_scale_map(root, scale_name, instrument, 24)?;
+fn run_scale(req: ScaleRequest) -> Result<(), CliError> {
+    let ScaleRequest {
+        root,
+        scale_type,
+        instrument,
+        no_color,
+    } = req;
+    let preset = resolve_instrument_preset(&instrument)?;
+    let fretboard_config = create_fretboard_config(
+        preset.tuning,
+        preset.instrument.fret_count,
+        Orientation::RightHanded,
+    );
+    let scale_map = build_scale_map(
+        &root,
+        &scale_type,
+        &instrument,
+        preset.instrument.fret_count,
+    )?;
+    let options = RenderOptions {
+        fret_range: 0..=preset.instrument.fret_count,
+        root: Some(scale_map.notes[0]),
+        use_flats: scale_map.prefer_flat,
+        capo: 0,
+        label_mode: LabelMode::NoteName,
+        show_inlays: true,
+        scheme: use_color(no_color).then(ColorScheme::default),
+        muted_strings: vec![],
+    };
     println!("Scale: {}", format_scale_notes(&scale_map));
+    println!("{}", render_fretboard(&fretboard_config, &scale_map.coords, &options));
 
     Ok(())
 }
